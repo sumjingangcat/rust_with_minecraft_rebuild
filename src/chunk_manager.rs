@@ -213,27 +213,27 @@ impl ChunkManager {
     pub fn get_active_sides_of_block(&self, x: i32, y: i32, z: i32) -> Sides {
         let right = self
             .get_block(x + 1, y, z)
-            .filter(|&b| b != BlockID::Air)
+            .filter(|&b| !b.is_transparent())
             .is_none();
         let left = self
             .get_block(x - 1, y, z)
-            .filter(|&b| b != BlockID::Air)
+            .filter(|&b| !b.is_transparent())
             .is_none();
         let top = self
             .get_block(x, y + 1, z)
-            .filter(|&b| b != BlockID::Air)
+            .filter(|&b| !b.is_transparent())
             .is_none();
         let bottom = self
             .get_block(x, y - 1, z)
-            .filter(|&b| b != BlockID::Air)
+            .filter(|&b| !b.is_transparent())
             .is_none();
         let front = self
             .get_block(x, y, z + 1)
-            .filter(|&b| b != BlockID::Air)
+            .filter(|&b| !b.is_transparent())
             .is_none();
         let back = self
             .get_block(x, y, z - 1)
-            .filter(|&b| b != BlockID::Air)
+            .filter(|&b| !b.is_transparent())
             .is_none();
 
         (right, left, top, bottom, front, back)

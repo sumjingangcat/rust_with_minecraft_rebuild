@@ -66,6 +66,15 @@ pub enum BlockID {
     Grass,
 }
 
+impl BlockID {
+    pub fn is_transparent(&self) -> bool {
+        match self {
+            BlockID::Air => true,
+            _ => false,
+        }
+    }
+}
+
 impl Distribution<BlockID> for Standard {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> BlockID {
         match rng.gen_range(1..4) {
