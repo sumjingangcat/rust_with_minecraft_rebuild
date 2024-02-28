@@ -13,6 +13,8 @@ use nalgebra_glm::{pi, vec2, vec3, IVec3, Vec2};
 use crate::block_texture_sides::{get_uv_every_side, BlockFaces};
 use noise::{NoiseFn, SuperSimplex};
 
+use rand::random;
+
 pub const CHUNK_SIZE: u32 = 16;
 
 pub const CHUNK_VOLUME: u32 = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
@@ -63,6 +65,38 @@ impl ChunkManager {
                 self.set_block(x, y - 1, z, BlockID::Dirt);
                 self.set_block(x, y - 2, z, BlockID::Cobblestone);
                 self.set_block(x, y - 3, z, BlockID::Obsidian);
+
+                    if random::<u32>() % 100 == 0 {
+                        let tree_height = 4;
+
+                        for i in y + 1 .. y + 1 + tree_height {
+                            self.set_block(x, i, z, BlockID::OakLog);
+                        }
+
+                        for yy in y + tree_height - 2 ..=y + tree_height - 1 {
+                            for xx in x - 2..= x + 2 {
+                                for zz in z - 2..=z + 2{
+                                    if xx != x || zz != z {
+                                        self.set_block(xx, yy, zz, BlockID::OakLeaves);
+                                    }
+                            }
+                        }
+
+                        for xx in x - 1..= x + 1 {
+                            for zz in z - 1..=z + 1{
+                                if xx != x || zz != z{
+                                    self.set_block(xx, y + tree_height, zz, BlockID::OakLeaves);
+                                }
+                            }
+                        }
+
+                        self.set_block(x, y + tree_height + 1, z, BlockID::OakLeaves);
+                        self.set_block(x + 1, y + tree_height + 1, z, BlockID::OakLeaves);
+                        self.set_block(x - 1, y + tree_height + 1, z, BlockID::OakLeaves);
+                        self.set_block(x, y + tree_height + 1, z + 1, BlockID::OakLeaves);
+                        self.set_block(x, y + tree_height + 1, z - 1, BlockID::OakLeaves);
+                    }
+                }
             }
         }
     }
