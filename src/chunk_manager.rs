@@ -1,3 +1,4 @@
+use crate::chunk;
 use crate::shader::ShaderProgram;
 use crate::{
     chunk::{BlockID, Chunk},
@@ -19,7 +20,7 @@ pub const CHUNK_SIZE: u32 = 16;
 
 pub const CHUNK_VOLUME: u32 = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
 
-pub type Sides = (bool, bool, bool, bool, bool, bool);
+pub type Sides = [bool; 6];
 
 pub struct ChunkManager {
     // 접근을 많이 하므로 Vec 대신 HashMap을 사용한다.
@@ -130,7 +131,7 @@ impl ChunkManager {
         self.loaded_chunks
             .get((chunk_x, chunk_y, chunk_z).borrow())
             .and_then(|chunk| {
-                Some(chunk.get_block(block_x as usize, block_y as usize, block_z as usize))
+                Some(chunk.get_block(block_x, block_y, block_z))
             })
     }
 
@@ -141,7 +142,7 @@ impl ChunkManager {
         self.loaded_chunks
             .get_mut((chunk_x, chunk_y, chunk_z).borrow())
             .map(|chunk| {
-                chunk.set_block(block_x as usize, block_y as usize, block_z as usize, block);
+                chunk.set_block(block_x, block_y, block_z, block);
             });
     }
 
@@ -166,12 +167,18 @@ impl ChunkManager {
             let (cx, cy, cz) = coords;
             let chunk = self.loaded_chunks.get(&coords);
 
-            if let Some(_) = chunk {
+            if let Some(chunk) = chunk {
                 let sides_vec = active_sides.entry(coords).or_default(); // if key does not exist, insert default value.
 
                 for by in 0..CHUNK_SIZE {
                     for bz in 0..CHUNK_SIZE {
                         for bx in 0..CHUNK_SIZE {
+                            if !chunk.get_block(bx, by, bz).is_air() {
+                                let (gx, gy, gz) = 
+                                    ChunkManager::get_global_coords((cx, cy, cz, bx, by, bz));
+                                sides_vec.push(self.get_active_sides_of_block(gx, gy, gz));
+                            }
+
                             let (gx, gy, gz) =
                                 ChunkManager::get_global_coords((cx, cy, cz, bx, by, bz));
                             sides_vec.push(self.get_active_sides_of_block(gx, gy, gz));
@@ -182,12 +189,31 @@ impl ChunkManager {
         }
 
         for coords in dirty_chunks.iter() {
-            let mut idx = 0;
             let chunk = self.loaded_chunks.get_mut(coords);
 
             if let Some(chunk) = chunk {
+                chunk.dirty = false;
+                chunk.dirty_neighbours.clear();
+                chunk.vertices_drawn = 0;
+
+                let sides = active_sides.get(coords).unwrap();
+                let n_visible_faces = sides.iter().map(|faces| faces.iter().fold(0, |acc, &x| acc + x as u32)).fold(0, |acc, n| acc + n);
+
+                if n_visible_faces == 0 {
+                    continue;
+                }
+
+                // Initialize VBO
+                gl_call!(gl::NamedBufferData(
+                    chunk.vbo,
+                    (180 * std::mem::size_of::<f32>() * n_visible_faces as usize) as isize,
+                    std::ptr::null(),
+                    gl::DYNAMIC_DRAW
+                ));
+
                 // get buffer object pointer
                 let vbo_ptr = gl_call!(gl::MapNamedBuffer(chunk.vbo, gl::WRITE_ONLY)) as *mut f32;
+                let mut idx = 0;
 
                 let sides_vec: &Vec<Sides> = active_sides.get(&coords).unwrap();
                 let mut cnt = 0;
@@ -195,7 +221,7 @@ impl ChunkManager {
                 for y in 0..CHUNK_SIZE {
                     for z in 0..CHUNK_SIZE {
                         for x in 0..CHUNK_SIZE {
-                            let block = chunk.get_block(x as usize, y as usize, z as usize);
+                            let block = chunk.get_block(x, y, z);
 
                             if block != BlockID::Air {
                                 let active_sides = sides_vec[cnt];
@@ -213,6 +239,7 @@ impl ChunkManager {
 
                                 chunk.vertices_drawn += copied_vertices;
                                 idx += copied_vertices as isize * 5;
+                                cnt += 1;
 
                                 // let cube_array = unit_cube_array(
                                 //     (x as f32, y as f32, z as f32),
@@ -231,7 +258,6 @@ impl ChunkManager {
 
                                 // idx += cube_array.len();
                             }
-                            cnt += 1;
                         }
                     }
                 }
@@ -270,11 +296,16 @@ impl ChunkManager {
             .filter(|&b| !b.is_transparent())
             .is_none();
 
-        (right, left, top, bottom, front, back)
+        [right, left, top, bottom, front, back]
     }
 
     pub fn render_loaded_chunks(&mut self, program: &mut ShaderProgram) {
         for ((x, y, z), chunk) in &self.loaded_chunks {
+            // Skip rendering the chunk if there is nothing to draw
+            if chunk.vertices_drawn == 0 {
+                return;
+            }
+
             let model_matrix = {
                 let translate_matrix =
                     Matrix4::new_translation(&vec3(*x as f32, *y as f32, *z as f32).scale(16.0));

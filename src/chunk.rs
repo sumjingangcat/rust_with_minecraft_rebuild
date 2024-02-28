@@ -39,12 +39,7 @@ fn create_vao_vbo() -> (u32, u32) {
 
     let mut vbo = 0;
     gl_call!(gl::CreateBuffers(1, &mut vbo));
-    gl_call!(gl::NamedBufferData(
-        vbo,
-        (180 * CHUNK_VOLUME as usize * std::mem::size_of::<f32>()) as isize,
-        std::ptr::null(),
-        gl::DYNAMIC_DRAW
-    ));
+    
 
     gl_call!(gl::VertexArrayVertexBuffer(
         vao,
@@ -69,6 +64,10 @@ pub enum BlockID {
 }
 
 impl BlockID {
+    pub fn is_air(&self) -> bool {
+        self == &BlockID::Air
+    }
+
     pub fn is_transparent(&self) -> bool {
         match self {
             BlockID::Air | BlockID::OakLeaves => true,
@@ -157,17 +156,17 @@ impl Chunk {
     }
 
     #[inline]
-    fn coords_to_index(x: usize, y: usize, z: usize) -> usize {
-        y * (CHUNK_SIZE as usize * CHUNK_SIZE as usize) + z * CHUNK_SIZE as usize + x
+    fn coords_to_index(x: u32, y: u32, z: u32) -> usize {
+        (y * (CHUNK_SIZE * CHUNK_SIZE) + z * CHUNK_SIZE + x) as usize
     }
 
     #[inline]
-    pub fn get_block(&self, x: usize, y: usize, z: usize) -> BlockID {
+    pub fn get_block(&self, x: u32, y: u32, z: u32) -> BlockID {
         self.blocks[Self::coords_to_index(x, y, z)]
     }
 
     #[inline]
-    pub fn set_block(&mut self, x: usize, y: usize, z: usize, block: BlockID) {
+    pub fn set_block(&mut self, x: u32, y: u32, z: u32, block: BlockID) {
         self.blocks[Self::coords_to_index(x, y, z)] = block;
         self.dirty = true;
 
