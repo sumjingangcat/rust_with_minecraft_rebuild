@@ -1,18 +1,21 @@
-use nalgebra_glm::{Vec3, floor, I32Vec3, IVec3};
+use nalgebra_glm::{floor, I32Vec3, IVec3, Vec3};
 use num_traits::float::FloatCore;
 
 // direction must be normalized
-pub fn raycast<T>(get_voxel: &dyn Fn(i32, i32, i32) -> Option<T>,
-                  origin: &Vec3, direction: &Vec3, distance: f32) -> Option<(T, IVec3)> {
-
+pub fn raycast<T>(
+    get_voxel: &dyn Fn(i32, i32, i32) -> Option<T>,
+    origin: &Vec3,
+    direction: &Vec3,
+    distance: f32,
+) -> Option<(T, IVec3)> {
     let mut t = 0.0f32;
     let mut i = floor(&origin).map(|x| x as i32);
     let step = direction.map(|x| if x > 0f32 { 1 } else { -1 });
 
     // 방향 벡터의 성분이 차지하는 비율이 클수록 더 촘촘하게 샘플링한다.
     // 생각이 안난다면, 삼각형을 그려보자.
-    let t_delta = direction.map(|x| (1.0 / x).abs()); 
-    let dist = origin.zip_zip_map(&i, &step,|p, i, s| {
+    let t_delta = direction.map(|x| (1.0 / x).abs());
+    let dist = origin.zip_zip_map(&i, &step, |p, i, s| {
         if s > 0 {
             i as f32 + 1.0 - p
         } else {
@@ -20,7 +23,6 @@ pub fn raycast<T>(get_voxel: &dyn Fn(i32, i32, i32) -> Option<T>,
         }
     });
     let mut t_max = t_delta.zip_map(&dist, |t, d| {
-        
         if t.is_finite() {
             t * d
         } else {
@@ -33,7 +35,6 @@ pub fn raycast<T>(get_voxel: &dyn Fn(i32, i32, i32) -> Option<T>,
 
     let mut stepped_index = -1;
     while t <= distance {
-
         // exit check
         if let Some(voxel) = get_voxel(i.x, i.y, i.z) {
             hit_pos = origin.zip_map(&direction, |p, d| p + t * d);
@@ -79,6 +80,6 @@ pub fn raycast<T>(get_voxel: &dyn Fn(i32, i32, i32) -> Option<T>,
 
     // no voxel hit found
     hit_pos = origin.zip_map(&direction, |p, d| p + t * d);
-    
+
     None
 }

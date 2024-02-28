@@ -1,57 +1,57 @@
 #[macro_use]
 pub mod debugging;
+
+pub mod block_texture_sides;
+pub mod chunk;
+pub mod chunk_manager;
 pub mod ecs;
+pub mod raycast;
 pub mod renderer;
 pub mod shader;
 pub mod shapes;
 pub mod texture;
 pub mod util;
-pub mod chunk;
-pub mod raycast;
-pub mod chunk_manager;
 
 use crate::debugging::*;
 use crate::shader::{ShaderPart, ShaderProgram};
 use crate::util::forward;
 
-use gl::TextureParameterIiv;
+use crate::block_texture_sides::BlockFaces;
+use crate::chunk::BlockID;
+use crate::chunk_manager::ChunkManager;
 use glfw::ffi::glfwSwapInterval;
-use glfw::{Action, Context, CursorMode, WindowHint, Key, MouseButton};
-use image::ColorType;
-use image::codecs::qoi;
-use nalgebra::{clamp, Matrix4, Vector3};
-use nalgebra_glm::{pi, Vec2, vec2, vec3, IVec3};
+use glfw::{Action, Context, CursorMode, Key, MouseButton, WindowHint};
+use image::{ColorType, DynamicImage};
+use nalgebra::{clamp, Vector3};
+use nalgebra_glm::{pi, vec2, vec3, IVec3, Vec2};
+use std::collections::HashMap;
 use std::ffi::CString;
 use std::os::raw::c_void;
-use std::collections::HashMap;
 
-use crate::chunk::{Chunk, BlockID};
-use crate::chunk_manager::ChunkManager;
+type UVCoords = (f32, f32, f32, f32);
+type UVFaces = (UVCoords, UVCoords, UVCoords, UVCoords, UVCoords, UVCoords);
 
-pub struct InputCache{
-    // all inputs are cached here
-    // purpose : to prevent input loss
+pub struct InputCache {
     pub last_cursor_pos: Vec2,
-    pub cursor_re_pos: Vec2,
+    pub cursor_rel_pos: Vec2,
     pub key_states: HashMap<Key, Action>,
 }
 
-impl Default for InputCache{
+impl Default for InputCache {
     fn default() -> Self {
-        InputCache{
+        InputCache {
             last_cursor_pos: vec2(0.0, 0.0),
-            cursor_re_pos: vec2(0.0, 0.0),
+            cursor_rel_pos: vec2(0.0, 0.0),
             key_states: HashMap::new(),
         }
     }
 }
 
 impl InputCache {
-    pub fn is_key_pressed(&self, key: Key) -> bool{
-        match self.key_states.get(&key){
-            Some(Action::Press) => true,
-            Some(Action::Repeat) => true,
-            _ => false,
+    pub fn is_key_pressed(&self, key: Key) -> bool {
+        match self.key_states.get(&key) {
+            Some(action) => *action == Action::Press || *action == Action::Repeat,
+            None => false,
         }
     }
 }
@@ -126,11 +126,23 @@ fn main() {
             .unwrap();
     let mut program = ShaderProgram::from_shaders(vert, frag).unwrap();
 
+    // 각 블록들의 텍스쳐 제작
     // Generate texture atlas
-    let mut texture_map: HashMap<BlockID, &str> = HashMap::new();
-    texture_map.insert(BlockID::DIRT, "blocks/dirt.png");
-    texture_map.insert(BlockID::COBBLESTONE, "blocks/cobblestone.png");
-    texture_map.insert(BlockID::OBSIDIAN, "blocks/obsidian.png");
+    let mut texture_map: HashMap<BlockID, BlockFaces<&str>> = HashMap::new();
+    texture_map.insert(BlockID::Dirt, BlockFaces::All("blocks/dirt.png"));
+    texture_map.insert(
+        BlockID::Cobblestone,
+        BlockFaces::All("blocks/cobblestone.png"),
+    );
+    texture_map.insert(BlockID::Obsidian, BlockFaces::All("blocks/obsidian.png"));
+    texture_map.insert(
+        BlockID::Grass,
+        BlockFaces::Sides {
+            sides: "blocks/grass_block_side.png",
+            top: "blocks/grass_block_top.png",
+            bottom: "blocks/dirt.png",
+        },
+    );
 
     let mut atlas = 0;
     gl_call!(gl::CreateTextures(gl::TEXTURE_2D, 1, &mut atlas));
@@ -146,11 +158,11 @@ fn main() {
     ));
     gl_call!(gl::TextureStorage2D(atlas, 1, gl::RGBA8, 1024, 1024,));
 
-    let mut uv_map = HashMap::<BlockID, ((f32, f32), (f32, f32))>::new();
+    let mut uv_map = HashMap::<BlockID, BlockFaces<UVCoords>>::new();
     let mut x = 0;
     let mut y = 0;
 
-    for (block, texture_path) in texture_map {
+    let load_image = |texture_path: &str| {
         let img = image::open(texture_path);
         let img = match img {
             Ok(img) => img.flipv(),
@@ -162,11 +174,17 @@ fn main() {
             _ => panic!("Texture format not supported"),
         };
 
+        img
+    };
+
+    let mut blit_image = |img: &mut DynamicImage| {
+        let (dest_x, dest_y) = (x, y);
+
         gl_call!(gl::TextureSubImage2D(
             atlas,
             0,
-            x,
-            y,
+            dest_x,
+            dest_y,
             img.width() as i32,
             img.height() as i32,
             gl::RGBA,
@@ -174,40 +192,95 @@ fn main() {
             img.as_bytes().as_ptr() as *mut c_void
         ));
 
-        uv_map.insert(
-            block,
-            (
-                (x as f32 / 1024.0, y as f32 / 1024.0),
-                ((x as f32 + 16.0) / 1024.0, (y as f32 + 16.0) / 1024.0),
-            ),
-        );
-
         x += 16;
 
         if x >= 1024 {
             x = 0;
             y += 16;
         }
+
+        let (dest_x, dest_y) = (dest_x as f32, dest_y as f32);
+        (
+            dest_x / 1024.0,
+            dest_y / 1024.0,
+            (dest_x + 16.0) / 1024.0,
+            (dest_y + 16.0) / 1024.0,
+        )
+    };
+
+    for (block, faces) in texture_map {
+        match faces {
+            BlockFaces::All(all) => {
+                let mut img = load_image(all);
+                let uv = blit_image(&mut img);
+                uv_map.insert(block, BlockFaces::All(uv));
+            }
+            BlockFaces::Sides { sides, top, bottom } => {
+                let mut img = load_image(sides);
+                let uv_sides = blit_image(&mut img);
+
+                let mut img = load_image(top);
+                let uv_top = blit_image(&mut img);
+
+                let mut img = load_image(bottom);
+                let uv_bottom = blit_image(&mut img);
+
+                uv_map.insert(
+                    block,
+                    BlockFaces::Sides {
+                        sides: uv_sides,
+                        top: uv_top,
+                        bottom: uv_bottom,
+                    },
+                );
+            }
+            BlockFaces::Each {
+                top,
+                bottom,
+                front,
+                back,
+                left,
+                right,
+            } => {
+                let mut img = load_image(top);
+                let uv_top = blit_image(&mut img);
+
+                let mut img = load_image(bottom);
+                let uv_bottom = blit_image(&mut img);
+
+                let mut img = load_image(front);
+                let uv_front = blit_image(&mut img);
+
+                let mut img = load_image(back);
+                let uv_back = blit_image(&mut img);
+
+                let mut img = load_image(left);
+                let uv_left = blit_image(&mut img);
+
+                let mut img = load_image(right);
+                let uv_right = blit_image(&mut img);
+
+                uv_map.insert(
+                    block,
+                    BlockFaces::Each {
+                        top: uv_top,
+                        bottom: uv_bottom,
+                        front: uv_front,
+                        back: uv_back,
+                        left: uv_left,
+                        right: uv_right,
+                    },
+                );
+            }
+        }
     }
 
     gl_call!(gl::ActiveTexture(gl::TEXTURE0 + 0));
     gl_call!(gl::BindTexture(gl::TEXTURE_2D, atlas));
 
-    // let mut chunk = Chunk::empty();
-
-    // for y in 0..4{
-    //     for x in 0..16{
-    //         for z in 0.. 16 {
-    //             chunk.set_block(x, y, z, BlockID::COBBLESTONE)
-    //         }
-    //     }
-    // }
-
-    // chunk.regenerate_vbo(&uv_map);
-    // gl_call!(gl::BindVertexArray(chunk.vao));
-    
     let mut chunk_manager = ChunkManager::new();
-    chunk_manager.preload_some_chunks();
+    chunk_manager.simplex();
+    // chunk_manager.preload_some_chunks();
 
     let mut input_cache = InputCache::default();
     let mut prev_cursor_pos = (0.0, 0.0);
@@ -228,29 +301,15 @@ fn main() {
 
                     camera_rotation.x = clamp(
                         camera_rotation.x,
-                        -pi::<f32>() / 1.0 + 0.001,
-                        pi::<f32>() / 1.0 - 0.001,
+                        -pi::<f32>() / 2.0 + 0.0001,
+                        pi::<f32>() / 2.0 - 0.0001,
                     );
-
-                    camera_rotation.y = camera_rotation.y % (2.0 * pi::<f32>());
 
                     prev_cursor_pos = (x, y);
                 }
-
                 glfw::WindowEvent::Key(Key::Escape, _, Action::Press, _) => {
                     window.set_should_close(true);
                 }
-
-                glfw::WindowEvent::Key(Key::R, _, Action::Press, _) => {
-                    for _ in 0..16{
-                        let x = rand::random::<usize>() % 16;
-                        let y = rand::random::<usize>() % 16;
-                        let z = rand::random::<usize>() % 16;
-
-                        chunk_manager.set(x as i32, y as i32, z as i32, BlockID::OBSIDIAN);
-                    }
-                }
-
 
                 glfw::WindowEvent::Key(key, _, action, _) => {
                     input_cache.key_states.insert(key, action);
@@ -259,56 +318,57 @@ fn main() {
                 glfw::WindowEvent::MouseButton(button, Action::Press, _) => {
                     let forward = forward(&camera_rotation);
                     let get_voxel = |x: i32, y: i32, z: i32| {
-                        chunk_manager.get(x, y, z).filter(|&block| block != BlockID::AIR).and_then(|_| Some((x, y, z)))
+                        chunk_manager
+                            .get_block(x, y, z)
+                            .filter(|&block| block != BlockID::Air)
+                            .and_then(|_| Some((x, y, z)))
                     };
 
                     let hit =
-                        raycast::raycast(&get_voxel, &camera_position, &forward.normalize(), 4.0);
+                        raycast::raycast(&get_voxel, &camera_position, &forward.normalize(), 400.0);
 
                     if let Some(((x, y, z), normal)) = hit {
                         if button == MouseButton::Button1 {
-                            chunk_manager.set(x, y, z, BlockID::AIR)
+                            chunk_manager.set_block(x, y, z, BlockID::Air)
                         } else if button == MouseButton::Button2 {
-                            let near = IVec3::new(x as i32, y as i32, z as i32) + normal;
-                            chunk_manager.set(near.x, near.y, near.z, BlockID::DIRT)
+                            let near = IVec3::new(x, y, z) + normal;
+                            chunk_manager.set_block(near.x, near.y, near.z, BlockID::Dirt)
                         }
 
-                        println!("Hit: {:?}, {:?}", (x, y, z), normal);
+                        println!("HIT {} {} {}", x, y, z);
                         dbg!(forward);
-                    }
-                    else{
+                    } else {
                         println!("No hit");
                     }
                 }
-
 
                 _ => {}
             }
         }
 
-        let multiplier = 0.2f32;
-        
-        if input_cache.is_key_pressed(glfw::Key::W) {
+        let multiplier = 0.2_f32;
+
+        if input_cache.is_key_pressed(Key::W) {
             camera_position += forward(&camera_rotation).scale(multiplier);
         }
-        if input_cache.is_key_pressed(glfw::Key::S) {
-                    camera_position -= forward(&camera_rotation).scale(multiplier);
+        if input_cache.is_key_pressed(Key::S) {
+            camera_position -= forward(&camera_rotation).scale(multiplier);
         }
-        if input_cache.is_key_pressed(glfw::Key::A) {
+        if input_cache.is_key_pressed(Key::A) {
             camera_position -= forward(&camera_rotation)
                 .cross(&Vector3::y())
                 .scale(multiplier);
         }
-        if input_cache.is_key_pressed(glfw::Key::D){
+        if input_cache.is_key_pressed(Key::D) {
             camera_position += forward(&camera_rotation)
                 .cross(&Vector3::y())
                 .scale(multiplier);
         }
-        if input_cache.is_key_pressed(glfw::Key::Q) {
-            camera_position.y += multiplier;
+        if input_cache.is_key_pressed(Key::Q) {
+            camera_position.y += multiplier * 0.25_f32;
         }
-        if input_cache.is_key_pressed(glfw::Key::Z) {
-            camera_position.y -= multiplier;
+        if input_cache.is_key_pressed(Key::Z) {
+            camera_position.y -= multiplier * 0.25_f32;
         }
 
         let direction = forward(&camera_rotation);
@@ -321,28 +381,18 @@ fn main() {
 
         let projection_matrix = nalgebra_glm::perspective(1.0, pi::<f32>() / 2.0, 0.1, 1000.0);
 
-        // let model_matrix = {
-        //     let translate_matrix = Matrix4::new_translation(&vec3(0.0f32, 0.0, 0.0));
-        //     let rotate_matrix = Matrix4::from_euler_angles(0.0f32, 0.0, 0.0);
-        //     let scale_matrix = Matrix4::new_nonuniform_scaling(&vec3(1.0f32, 1.0f32, 1.0f32));
-
-        //     translate_matrix * rotate_matrix * scale_matrix
-        // };
+        chunk_manager.rebuild_dirty_chunks(&uv_map);
 
         program.use_program();
 
-        // program.set_uniform_matrix4fv("model", model_matrix.as_ptr());
         program.set_uniform_matrix4fv("view", view_matrix.as_ptr());
         program.set_uniform_matrix4fv("projection", projection_matrix.as_ptr());
         program.set_uniform1i("tex", 0);
-        
 
         gl_call!(gl::ClearColor(0.74, 0.84, 1.0, 1.0));
         gl_call!(gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT));
 
-        chunk_manager.rebuild_dirty_chunks(&uv_map);
         chunk_manager.render_loaded_chunks(&mut program);
-        
 
         // 프론트 버퍼와 백 버퍼 교체 - 프리징 방지
         window.swap_buffers();
