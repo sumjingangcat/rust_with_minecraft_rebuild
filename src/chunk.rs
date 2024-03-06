@@ -61,6 +61,8 @@ pub enum BlockID {
     Grass,
     OakLog,
     OakLeaves,
+    Debug,
+    Debug2,
 }
 
 impl BlockID {
