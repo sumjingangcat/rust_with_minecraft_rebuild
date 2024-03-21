@@ -3,6 +3,7 @@
         "**/target": true
     },
     "rust-analyzer.linkedProjects": [
+        ".\\Cargo.toml",
         ".\\Cargo.toml"
     ]
 }

@@ -1,10 +1,14 @@
 #[macro_use]
+extern crate lazy_static;
+
+#[macro_use]
 pub mod debugging;
 
 pub mod aabb;
 pub mod block_texture_sides;
 pub mod chunk;
 pub mod chunk_manager;
+pub mod constants;
 pub mod ecs;
 pub mod raycast;
 pub mod renderer;
@@ -13,6 +17,7 @@ pub mod shapes;
 pub mod texture;
 pub mod util;
 pub mod physics;
+use crate::constants::*;
 
 use crate::debugging::*;
 use crate::shader::{ShaderPart, ShaderProgram};
@@ -64,12 +69,6 @@ impl InputCache {
     }
 }
 
-const PLAYER_WIDTH: f32 = 0.6;
-const PLAYER_HEIGHT: f32 = 1.8;
-const PLAYER_EYES_HEIGHT: f32 = 1.6;
-const PLAYER_HALF_WIDTH: f32 = PLAYER_WIDTH / 2.0;
-const PLAYER_HALF_HEIGHT: f32 = PLAYER_HEIGHT / 2.0;
-
 pub struct PlayerRenderState {
     pub rotation: Vec3,
 }
@@ -90,19 +89,18 @@ fn main() {
     // glfw 초기화
     let mut glfw = glfw::init(glfw::FAIL_ON_ERRORS).unwrap();
     // glfw 힌트
-    glfw.window_hint(WindowHint::ContextVersion(4, 6));
+    glfw.window_hint(WindowHint::ContextVersion(OPENGL_MAJOR_VERSION, OPENGL_MINOR_VERSION));
     glfw.window_hint(WindowHint::OpenGlProfile(glfw::OpenGlProfileHint::Core));
     glfw.window_hint(WindowHint::OpenGlDebugContext(true));
     // 윈도우 크기 설정
     let window_size = (800, 800);
-    let window_title = "Minecraft";
 
     // 윈도우 창 생성
     let (mut window, events) = glfw
         .create_window(
-            window_size.0,
-            window_size.1,
-            window_title,
+            WINDOW_WIDTH,
+            WINDOW_HEIGHT,
+            WINDOW_NAME,
             glfw::WindowMode::Windowed,
         )
         .expect("Failed to create GLFW window");
@@ -115,7 +113,6 @@ fn main() {
     window.set_raw_mouse_motion(true);
     window.set_mouse_button_polling(true);
     window.set_cursor_mode(CursorMode::Disabled);
-    window.set_cursor_pos(400.0, 400.0);
 
     gl::load_with(|symbol| window.get_proc_address(symbol) as *const _);
     // 수직 동기화(Vsync)
@@ -143,7 +140,7 @@ fn main() {
     gl_call!(gl::Enable(gl::DEPTH_TEST));
     gl_call!(gl::Enable(gl::BLEND));
     gl_call!(gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA));
-    gl_call!(gl::Viewport(0, 0, 800, 800));
+    gl_call!(gl::Viewport(0, 0, WINDOW_WIDTH as i32, WINDOW_HEIGHT as i32));
 
     let mut player_render_state = PlayerRenderState::new();
     let mut physics_manager = PhysicsManager::new(
@@ -200,7 +197,7 @@ fn main() {
         gl::TEXTURE_MAG_FILTER,
         gl::NEAREST as i32
     ));
-    gl_call!(gl::TextureStorage2D(atlas, 1, gl::RGBA8, 1024, 1024,));
+    gl_call!(gl::TextureStorage2D(atlas, 1, gl::RGBA8, TEXTURE_ATLAS_SIZE as i32, TEXTURE_ATLAS_SIZE as i32,));
 
     let mut uv_map = HashMap::<BlockID, BlockFaces<UVCoords>>::new();
     let mut x = 0;
@@ -227,8 +224,8 @@ fn main() {
         gl_call!(gl::TextureSubImage2D(
             atlas,
             0,
-            dest_x,
-            dest_y,
+            dest_x as i32,
+            dest_y as i32,
             img.width() as i32,
             img.height() as i32,
             gl::RGBA,
@@ -236,19 +233,19 @@ fn main() {
             img.as_bytes().as_ptr() as *mut c_void
         ));
 
-        x += 16;
+        x += BLOCK_TEXTURE_SIZE;
 
-        if x >= 1024 {
+        if x >= TEXTURE_ATLAS_SIZE {
             x = 0;
-            y += 16;
+            y += BLOCK_TEXTURE_SIZE;
         }
 
         let (dest_x, dest_y) = (dest_x as f32, dest_y as f32);
         (
-            dest_x / 1024.0,
-            dest_y / 1024.0,
-            (dest_x + 16.0) / 1024.0,
-            (dest_y + 16.0) / 1024.0,
+            dest_x / TEXTURE_ATLAS_SIZE as f32,
+            dest_y / TEXTURE_ATLAS_SIZE as f32,
+            (dest_x + BLOCK_TEXTURE_SIZE as f32) / TEXTURE_ATLAS_SIZE as f32,
+            (dest_y + BLOCK_TEXTURE_SIZE as f32) / TEXTURE_ATLAS_SIZE as f32,
         )
     };
 
@@ -340,8 +337,8 @@ fn main() {
                     let rel_x = x - prev_cursor_pos.0;
                     let rel_y = y - prev_cursor_pos.1;
 
-                    player_render_state.rotation.y += rel_x as f32 / 100.0;
-                    player_render_state.rotation.x += rel_y as f32 / 100.0;
+                    player_render_state.rotation.y += rel_x as f32 / 100.0 * MOUSE_SENSITIVITY_X;
+                    player_render_state.rotation.x += rel_y as f32 / 100.0 * MOUSE_SENSITIVITY_Y;
 
                     player_render_state.rotation.x = clamp(
                         player_render_state.rotation.x,
@@ -374,7 +371,7 @@ fn main() {
                         &get_voxel,
                         &player.get_camera_position(),
                         &forward.normalize(),
-                        400.0,
+                        REACH_DISTANCE,
                     );
 
                     if let Some(((x, y, z), normal)) = hit {
@@ -403,8 +400,6 @@ fn main() {
         let mut rotation = player_render_state.rotation;
         rotation.x = 0.0;
 
-        let player = physics_manager.get_current_state();
-
         use crate::physics::get_block_aabb;
         use num_traits::identities::Zero;
         let render_state = physics_manager.step(&|mut previeous_state: PlayerPhysicsState, t: f32, dt: f32| {
@@ -413,7 +408,7 @@ fn main() {
             // Player Input Handling
             if input_cache.is_key_pressed(Key::Space) {
                 if player.is_on_ground {
-                    player.velocity.y = (56.0f32 * 1.3).sqrt();
+                    player.velocity.y = *JUMP_IMPULSE;
                 }
             }
 
@@ -432,28 +427,25 @@ fn main() {
                 directional_acceleration += forward(&rotation).cross(&Vector3::y());
             }
 
-            let multiplier = 30.0f32;
-
             if directional_acceleration.norm_squared() != 0.0 {
-                let directional_acceleration = directional_acceleration.normalize().scale(multiplier);
+                let directional_acceleration = directional_acceleration.normalize().scale(HORIZONTAL_ACCELERATION);
                 player.acceleration = directional_acceleration;
             }
 
-            player.acceleration.y = -28.0;
+            player.acceleration.y = GRAVITY;
             player.velocity += player.acceleration * dt;
             
             let mut horizontal = vec2(player.velocity.x, player.velocity.z);
             let mag = horizontal.magnitude();
-            let walking_speed = 4.137f32;
+            let walking_speed = WALKING_SPEED;
 
             if mag > walking_speed {
                 horizontal = horizontal.scale(walking_speed / mag);
             }
 
             // Vertical
-            
-            if player.velocity.y < -90.0 { // Terminal velocity
-                player.velocity.y = -90.0;
+            if player.velocity.y < -MAX_VERTICAL_VELOCITY { // Terminal velocity
+                player.velocity.y = -MAX_VERTICAL_VELOCITY;
             }
             player.velocity.x = horizontal.x;
             player.velocity.z = horizontal.y;
@@ -589,18 +581,18 @@ fn main() {
 
                 player.is_on_ground = is_player_on_ground;
 
-                let drag_percent = if is_player_on_ground {
-                    12.0
+                let friction = if is_player_on_ground {
+                    ON_GROUND_FRICTION
                 }else{
-                    2.0
+                    IN_AIR_FRICTION
                 };
 
                 if player.acceleration.x.is_zero() || player.acceleration.x.signum() != player.velocity.x.signum() {
-                    player.velocity.x -= drag_percent * player.velocity.x * dt;
+                    player.velocity.x -= friction * player.velocity.x * dt;
                 }
 
                 if player.acceleration.z.is_zero() || player.acceleration.z.signum() != player.velocity.z.signum() {
-                    player.velocity.z -= drag_percent * player.velocity.z * dt;
+                    player.velocity.z -= friction * player.velocity.z * dt;
                 }
 
                 player.acceleration.x = 0.0;
@@ -623,7 +615,7 @@ fn main() {
             &Vector3::y(),
         );
 
-        let projection_matrix = nalgebra_glm::perspective(1.0, pi::<f32>() / 2.0, 0.1, 1000.0);
+        let projection_matrix = nalgebra_glm::perspective(1.0, pi::<f32>() / 2.0, NEAR_PLANE, FAR_PLANE);
 
         chunk_manager.rebuild_dirty_chunks(&uv_map);
 
@@ -633,7 +625,8 @@ fn main() {
         program.set_uniform_matrix4fv("projection", projection_matrix.as_ptr());
         program.set_uniform1i("tex", 0);
 
-        gl_call!(gl::ClearColor(0.74, 0.84, 1.0, 1.0));
+        let (r, g, b, a) = BACKGROUND_COLOR;
+        gl_call!(gl::ClearColor(r, g, b, a));
         gl_call!(gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT));
 
         chunk_manager.render_loaded_chunks(&mut program);
