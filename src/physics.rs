@@ -1,4 +1,3 @@
-
 use std::ops::{Add, Mul};
 
 use crate::time;
@@ -12,7 +11,8 @@ pub struct PlayerPhysicsState{
     pub position: Vec3,
     pub aabb: AABB,
     pub velocity: Vec3,
-    pub accerleration: Vec3,
+    pub acceleration: Vec3,
+    pub is_on_ground: bool,
 }
 
 impl PlayerPhysicsState{
@@ -25,7 +25,8 @@ impl PlayerPhysicsState{
                 AABB::new(mins, maxs)
             },
             velocity: vec3(0.0, 0.0, 0.0),
-            accerleration: vec3(0.0, 0.0, 0.0),
+            acceleration: vec3(0.0, 0.0, 0.0),
+            is_on_ground: false,
         }
     }
 
@@ -42,7 +43,7 @@ impl Add for PlayerPhysicsState {
         self.aabb.mins += rhs.aabb.mins;
         self.aabb.maxs += rhs.aabb.maxs;
         self.velocity += rhs.velocity;
-        self.accerleration += rhs.accerleration;
+        self.acceleration += rhs.acceleration;
         self
     }
 }
@@ -55,7 +56,7 @@ impl Mul<f32> for PlayerPhysicsState{
         self.aabb.mins *= rhs;
         self.aabb.maxs *= rhs;
         self.velocity *= rhs;
-        self.accerleration *= rhs;
+        self.acceleration *= rhs;
         self
     }
 }
