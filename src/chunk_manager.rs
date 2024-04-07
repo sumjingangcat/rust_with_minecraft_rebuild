@@ -1,6 +1,6 @@
 use crate::block_texture_sides::{get_uv_every_side, BlockFaces};
 use crate::shader::ShaderProgram;
-use crate::UVCoords;
+use crate::types::UVCoords;
 use crate::{
     chunk::{BlockID, Chunk},
     shapes::write_unit_cube_to_ptr,
@@ -14,8 +14,6 @@ use std::collections::{HashMap, HashSet};
 
 pub const CHUNK_SIZE: u32 = 16;
 pub const CHUNK_VOLUME: u32 = CHUNK_SIZE * CHUNK_SIZE * CHUNK_SIZE;
-
-pub type Sides = [bool; 6];
 
 pub struct ChunkManager {
     pub loaded_chunks: HashMap<(i32, i32, i32), Chunk>,
@@ -38,7 +36,7 @@ impl ChunkManager {
         }
     }
 
-    pub fn simplex(&mut self) {
+    pub fn generate_terrain(&mut self) {
         let ss = SuperSimplex::new(1296);
         let n = 10;
 
@@ -95,7 +93,8 @@ impl ChunkManager {
         }
     }
 
-    fn get_chunk_and_block_coords(x: i32, y: i32, z: i32) -> (i32, i32, i32, u32, u32, u32) {
+    // Transform global coordinates into chunk local coordinates
+    fn get_chunk_coords(x: i32, y: i32, z: i32) -> (i32, i32, i32, u32, u32, u32) {
         let chunk_x = if x < 0 { (x + 1) / 16 - 1 } else { x / 16 };
         let chunk_y = if y < 0 { (y + 1) / 16 - 1 } else { y / 16 };
         let chunk_z = if z < 0 { (z + 1) / 16 - 1 } else { z / 16 };
@@ -107,6 +106,7 @@ impl ChunkManager {
         (chunk_x, chunk_y, chunk_z, block_x, block_y, block_z)
     }
 
+    // Transform chunk local coordinates into global coordinates
     fn get_global_coords(
         (chunk_x, chunk_y, chunk_z, block_x, block_y, block_z): (i32, i32, i32, u32, u32, u32),
     ) -> (i32, i32, i32) {
@@ -119,7 +119,7 @@ impl ChunkManager {
 
     pub fn get_block(&self, x: i32, y: i32, z: i32) -> Option<BlockID> {
         let (chunk_x, chunk_y, chunk_z, block_x, block_y, block_z) =
-            ChunkManager::get_chunk_and_block_coords(x, y, z);
+            ChunkManager::get_chunk_coords(x, y, z);
 
         self.loaded_chunks
             .get((chunk_x, chunk_y, chunk_z).borrow())
@@ -128,13 +128,20 @@ impl ChunkManager {
 
     pub fn set_block(&mut self, x: i32, y: i32, z: i32, block: BlockID) {
         let (chunk_x, chunk_y, chunk_z, block_x, block_y, block_z) =
-            ChunkManager::get_chunk_and_block_coords(x, y, z);
+            ChunkManager::get_chunk_coords(x, y, z);
 
         self.loaded_chunks
             .get_mut((chunk_x, chunk_y, chunk_z).borrow())
             .map(|chunk| chunk.set_block(block_x, block_y, block_z, block));
     }
 
+    pub fn is_solid_block_at(&self, x: i32, y: i32, z: i32) -> bool {
+        self.get_block(x, y, z)
+            .filter(|&block| block != BlockID::Air)
+            .is_some()
+    }
+
+    // UV coordinates are composed of 4, the first 2, and the last 2 are the UV coordinates of the front face
     pub fn rebuild_dirty_chunks(&mut self, uv_map: &HashMap<BlockID, BlockFaces<UVCoords>>) {
         let mut dirty_chunks = HashSet::new();
 
@@ -149,6 +156,11 @@ impl ChunkManager {
             }
         }
 
+        /*
+           Optimization :
+               If 2
+        */
+        pub type Sides = [bool; 6];
         let mut active_sides: HashMap<(i32, i32, i32), Vec<Sides>> = HashMap::new();
 
         for &coords in dirty_chunks.iter() {
@@ -172,9 +184,11 @@ impl ChunkManager {
             }
         }
 
+        // Update the VBOs of the dirty chunks
         for coords in dirty_chunks.iter() {
             let chunk = self.loaded_chunks.get_mut(coords);
 
+            // We check for a valid chunk because the chunk might have been removed
             if let Some(chunk) = chunk {
                 chunk.dirty = false;
                 chunk.dirty_neighbours.clear();
@@ -235,7 +249,7 @@ impl ChunkManager {
         }
     }
 
-    pub fn get_active_sides_of_block(&self, x: i32, y: i32, z: i32) -> Sides {
+    pub fn get_active_sides_of_block(&self, x: i32, y: i32, z: i32) -> [bool; 6] {
         let right = self
             .get_block(x + 1, y, z)
             .filter(|&b| !b.is_transparent())

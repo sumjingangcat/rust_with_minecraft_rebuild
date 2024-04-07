@@ -1,4 +1,4 @@
-use nalgebra_glm::Vec3;
+use nalgebra_glm::{vec3, Vec3};
 
 #[derive(Debug, Copy, Clone)]
 
@@ -25,4 +25,8 @@ impl AABB {
             && self.mins.z < other.maxs.z
             && self.maxs.z > other.mins.z
     }
+}
+
+pub fn get_block_aabb(mins: &Vec3) -> AABB {
+    AABB::new(mins.clone(), mins + vec3(1.0, 1.0, 1.0))
 }

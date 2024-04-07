@@ -2,12 +2,12 @@ use nalgebra_glm::{floor, I32Vec3, IVec3, Vec3};
 use num_traits::float::FloatCore;
 
 // direction must be normalized
-pub fn raycast<T>(
-    get_voxel: &dyn Fn(i32, i32, i32) -> Option<T>,
+pub fn raycast(
+    is_solid_block_at: &dyn Fn(i32, i32, i32) -> bool,
     origin: &Vec3,
     direction: &Vec3,
     distance: f32,
-) -> Option<(T, IVec3)> {
+) -> Option<((i32, i32, i32), IVec3)> {
     let mut t = 0.0f32;
     let mut i = floor(&origin).map(|x| x as i32);
     let step = direction.map(|x| if x > 0f32 { 1 } else { -1 });
@@ -36,7 +36,7 @@ pub fn raycast<T>(
     let mut stepped_index = -1;
     while t <= distance {
         // exit check
-        if let Some(voxel) = get_voxel(i.x, i.y, i.z) {
+        if is_solid_block_at(i.x, i.y, i.z) {
             hit_pos = origin.zip_map(&direction, |p, d| p + t * d);
             if stepped_index == 0 {
                 hit_norm[0] = -step.x;
@@ -47,7 +47,7 @@ pub fn raycast<T>(
             if stepped_index == 2 {
                 hit_norm[2] = -step.z;
             }
-            return Some((voxel, hit_norm));
+            return Some(((i.x, i.y, i.z), hit_norm));
         }
 
         // advance t to next nearest voxel boundary

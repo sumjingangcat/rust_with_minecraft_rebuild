@@ -1,9 +1,15 @@
 use nalgebra_glm::{vec3, Vec3};
 
-pub fn forward(rotation: &Vec3) -> Vec3 {
-    vec3(
-        rotation.x.cos() * rotation.y.cos(),
-        rotation.y.sin(),
-        rotation.x.cos() * rotation.y.sin(),
-    )
+pub trait Forward {
+    fn forward(&self) -> Self;
+}
+
+impl Forward for Vec3 {
+    fn forward(&self) -> Self {
+        vec3(
+            self.x.cos() * self.y.cos(),
+            self.y.sin(),
+            self.x.cos() * self.y.sin(),
+        )
+    }
 }

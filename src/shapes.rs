@@ -1,11 +1,11 @@
-use crate::{chunk_manager::Sides, UVFaces};
+use crate::types::UVFaces;
 
 #[rustfmt::skip]
 pub unsafe fn write_unit_cube_to_ptr(
     ptr: *mut f32,
     (x, y, z): (f32, f32, f32),
     (front_uv, back_uv, top_uv, bottom_uv, left_uv, right_uv): UVFaces,
-    [right, left, top, bottom, front, back]: Sides,
+    [right, left, top, bottom, front, back]: [bool; 6],
 ) -> u32 {
 
     let vertex_size = 5; // 3 for position, 2 for uv

@@ -2,6 +2,7 @@ use crate::gl_call;
 
 use gl;
 use std::collections::HashMap;
+use std::fs::read_to_string;
 use std::{
     ffi::{CStr, CString},
     sync::Mutex,
@@ -191,6 +192,15 @@ impl ShaderProgram {
             id: program_id,
             uniform_cache: Mutex::new(HashMap::new()),
         })
+    }
+
+    pub fn compile(vertex: &str, fragment: &str) -> ShaderProgram {
+        let vert =
+            ShaderPart::from_vert_source(&CString::new(read_to_string(vertex).unwrap()).unwrap()).unwrap();
+        let frag =
+            ShaderPart::from_frag_source(&CString::new(read_to_string(fragment).unwrap()).unwrap()).unwrap();
+
+        ShaderProgram::from_shaders(vert, frag).unwrap()
     }
 }
 
