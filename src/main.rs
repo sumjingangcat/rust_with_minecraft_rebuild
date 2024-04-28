@@ -10,6 +10,7 @@ pub mod chunk;
 pub mod chunk_manager;
 pub mod constants;
 pub mod ecs;
+pub mod gui;
 pub mod input;
 pub mod physics;
 pub mod player;
@@ -48,6 +49,8 @@ use crate::physics::PhysicsManager;
 use crate::player::{PlayerPhysicsState, PlayerProperties};
 use std::time;
 
+use crate::gui::{create_crosshair_vao, create_gui_icons_texture, draw_crosshair};
+
 fn main() {
     let (mut glfw, mut window, events) = create_window(WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_NAME);
 
@@ -72,7 +75,7 @@ fn main() {
     // enable depth test (z-buffer)
     gl_call!(gl::Enable(gl::DEPTH_TEST));
     gl_call!(gl::Enable(gl::BLEND));
-    gl_call!(gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA));
+    // gl_call!(gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA));
     gl_call!(gl::Viewport(
         0,
         0,
@@ -82,8 +85,19 @@ fn main() {
 
     // Generate Texture Atlas
     let (atlas, uv_map) = generate_texture_atlas();
+    gl_call!(gl::ActiveTexture(gl::TEXTURE0));
+    gl_call!(gl::BindTexture(gl::TEXTURE_2D, atlas));
+
+    let gui_icons_texture = create_gui_icons_texture();
+    gl_call!(gl::ActiveTexture(gl::TEXTURE1));
+    gl_call!(gl::BindTexture(gl::TEXTURE_2D, gui_icons_texture));
+
     let mut voxel_shader =
         ShaderProgram::compile("src/shaders/voxel.vert", "src/shaders/voxel.frag");
+
+    let mut gui_shader = ShaderProgram::compile("src/shaders/gui.vert", "src/shaders/gui.frag");
+
+    let gui_vao = create_crosshair_vao();
 
     let mut player_properties = PlayerProperties::new();
     let mut physics_manager = PhysicsManager::new(
@@ -167,32 +181,43 @@ fn main() {
 
         let player_physics_state =
             physics_manager.update_player_physics(&input_cache, &chunk_manager, &player_properties);
-        let looking_dir = player_properties.rotation.forward();
-        let view_matrix = {
-            let camera_position = player_physics_state.get_camera_position();
-            nalgebra_glm::look_at(
-                &camera_position,
-                &(camera_position + looking_dir),
-                &Vector3::y(),
-            )
-        };
-
-        let projection_matrix =
-            nalgebra_glm::perspective(1.0, pi::<f32>() / 2.0, NEAR_PLANE, FAR_PLANE);
 
         chunk_manager.rebuild_dirty_chunks(&uv_map);
 
-        voxel_shader.use_program();
+        // Draw chunks
+        {
+            let view_matrix = {
+                let camera_position = player_physics_state.get_camera_position();
+                let looking_dir = player_properties.rotation.forward();
 
-        voxel_shader.set_uniform_matrix4fv("view", view_matrix.as_ptr());
-        voxel_shader.set_uniform_matrix4fv("projection", projection_matrix.as_ptr());
-        voxel_shader.set_uniform1i("atlas", 0);
+                nalgebra_glm::look_at(
+                    &camera_position,
+                    &(camera_position + looking_dir),
+                    &Vector3::y(),
+                )
+            };
 
-        let (r, g, b, a) = BACKGROUND_COLOR;
-        gl_call!(gl::ClearColor(r, g, b, a));
-        gl_call!(gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT));
+            let projection_matrix =
+                nalgebra_glm::perspective(1.0, pi::<f32>() / 2.0, NEAR_PLANE, FAR_PLANE);
 
-        chunk_manager.render_loaded_chunks(&mut voxel_shader);
+            voxel_shader.use_program();
+
+            voxel_shader.set_uniform_matrix4fv("view", view_matrix.as_ptr());
+            voxel_shader.set_uniform_matrix4fv("projection", projection_matrix.as_ptr());
+            voxel_shader.set_uniform1i("atlas", 0);
+
+            let (r, g, b, a) = BACKGROUND_COLOR;
+            gl_call!(gl::ClearColor(r, g, b, a));
+            gl_call!(gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT));
+            gl_call!(gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA));
+
+            chunk_manager.render_loaded_chunks(&mut voxel_shader);
+        }
+
+        // Draw GUI
+        {
+            draw_crosshair(gui_vao, &mut gui_shader);
+        }
 
         // 프론트 버퍼와 백 버퍼 교체 - 프리징 방지
         window.swap_buffers();

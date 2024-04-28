@@ -1,5 +1,13 @@
 use crate::types::UVFaces;
 
+pub fn quad(uv: (f32, f32, f32, f32)) -> Vec<f32> {
+    (&[
+        -0.5f32, -0.5, 0.0, uv.0, uv.1, 0.5, -0.5, 0.0, uv.2, uv.1, 0.5, 0.5, 0.0, uv.2, uv.3, 0.5,
+        0.5, 0.0, uv.2, uv.3, -0.5, 0.5, 0.0, uv.0, uv.3, -0.5, -0.5, 0.0, uv.0, uv.1,
+    ])
+        .to_vec()
+}
+
 #[rustfmt::skip]
 pub unsafe fn write_unit_cube_to_ptr(
     ptr: *mut f32,
