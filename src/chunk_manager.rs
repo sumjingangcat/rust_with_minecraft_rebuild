@@ -2,7 +2,7 @@ use crate::block_texture_sides::{get_uv_every_side, BlockFaces};
 use crate::shader::ShaderProgram;
 use crate::types::UVCoords;
 use crate::{
-    chunk::{BlockID, Chunk},
+    chunk::{BlockID, BlockIterator, Chunk},
     shapes::write_unit_cube_to_ptr,
 };
 use nalgebra::Matrix4;
@@ -170,15 +170,12 @@ impl ChunkManager {
             if let Some(chunk) = chunk {
                 let sides_vec = active_sides.entry(coords).or_default();
 
-                for by in 0..CHUNK_SIZE {
-                    for bz in 0..CHUNK_SIZE {
-                        for bx in 0..CHUNK_SIZE {
-                            if !chunk.get_block(bx, by, bz).is_air() {
-                                let (gx, gy, gz) =
-                                    ChunkManager::get_global_coords((cx, cy, cz, bx, by, bz));
-                                sides_vec.push(self.get_active_sides_of_block(gx, gy, gz));
-                            }
-                        }
+                for (bx, by, bz) in BlockIterator::new() {
+                    let block = chunk.get_block(bx, by, bz);
+                    if !block.is_air() {
+                        let (gx, gy, gz) =
+                            ChunkManager::get_global_coords((cx, cy, cz, bx, by, bz));
+                        sides_vec.push(self.get_active_sides_of_block(gx, gy, gz));
                     }
                 }
             }
@@ -217,31 +214,27 @@ impl ChunkManager {
                 let sides_vec = active_sides.get(coords).unwrap();
                 let mut cnt = 0;
 
-                for y in 0..CHUNK_SIZE {
-                    for z in 0..CHUNK_SIZE {
-                        for x in 0..CHUNK_SIZE {
-                            let block = chunk.get_block(x, y, z);
+                for (x, y, z) in BlockIterator::new() {
+                    let block = chunk.get_block(x, y, z);
 
-                            if block != BlockID::Air {
-                                let active_sides = sides_vec[cnt];
+                    if block != BlockID::Air {
+                        let active_sides = sides_vec[cnt];
 
-                                let uvs = uv_map.get(&block).unwrap().clone();
-                                let uvs = get_uv_every_side(uvs);
+                        let uvs = uv_map.get(&block).unwrap().clone();
+                        let uvs = get_uv_every_side(uvs);
 
-                                let copied_vertices = unsafe {
-                                    write_unit_cube_to_ptr(
-                                        vbo_ptr.offset(idx),
-                                        (x as f32, y as f32, z as f32),
-                                        uvs,
-                                        active_sides,
-                                    )
-                                };
+                        let copied_vertices = unsafe {
+                            write_unit_cube_to_ptr(
+                                vbo_ptr.offset(idx),
+                                (x as f32, y as f32, z as f32),
+                                uvs,
+                                active_sides,
+                            )
+                        };
 
-                                chunk.vertices_drawn += copied_vertices;
-                                idx += copied_vertices as isize * 5;
-                                cnt += 1;
-                            }
-                        }
+                        chunk.vertices_drawn += copied_vertices;
+                        idx += copied_vertices as isize * 5;
+                        cnt += 1;
                     }
                 }
                 gl_call!(gl::UnmapNamedBuffer(chunk.vbo));

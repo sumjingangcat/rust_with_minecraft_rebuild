@@ -190,3 +190,44 @@ impl Chunk {
         }
     }
 }
+
+// Iterator that iterates overall possible block coordinates of a chunk on all 3 axis
+// Equivalent in functionality to a triple for loop from 0 to CHUNK_SIZE each
+
+pub struct BlockIterator {
+    x: u32,
+    y: u32,
+    z: u32,
+}
+
+impl BlockIterator {
+    pub fn new() -> BlockIterator {
+        BlockIterator { x: 0, y: 0, z: 0 }
+    }
+}
+
+impl Iterator for BlockIterator {
+    type Item = (u32, u32, u32);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.y == CHUNK_SIZE {
+            None
+        } else {
+            let ret = (self.x, self.y, self.z);
+
+            self.x += 1;
+
+            if self.x == CHUNK_SIZE {
+                self.x = 0;
+                self.z += 1;
+
+                if self.z == CHUNK_SIZE {
+                    self.z = 0;
+                    self.y += 1;
+                }
+            }
+
+            Some(ret)
+        }
+    }
+}

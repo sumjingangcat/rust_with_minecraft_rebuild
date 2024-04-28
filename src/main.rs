@@ -10,27 +10,27 @@ pub mod chunk;
 pub mod chunk_manager;
 pub mod constants;
 pub mod ecs;
+pub mod input;
 pub mod physics;
+pub mod player;
 pub mod raycast;
 pub mod renderer;
 pub mod shader;
 pub mod shapes;
 pub mod texture;
+pub mod texture_pack;
 pub mod types;
 pub mod util;
 pub mod window;
-pub mod texture_pack;
-pub mod input;
-pub mod player;
 
 use crate::aabb::get_block_aabb;
 use crate::constants::*;
+use crate::input::InputCache;
 use crate::texture_pack::*;
 use crate::window::*;
-use crate::input::InputCache;
 
 use crate::debugging::*;
-use crate::shader::{ShaderProgram};
+use crate::shader::ShaderProgram;
 use crate::util::Forward;
 
 use crate::chunk::BlockID;
@@ -38,16 +38,15 @@ use crate::chunk_manager::ChunkManager;
 
 use glfw::ffi::glfwSwapInterval;
 use glfw::{Action, Context, Key, MouseButton, WindowHint};
-use nalgebra::{Vector3};
+use nalgebra::Vector3;
 use nalgebra_glm::{pi, vec3, IVec3, Vec2, Vec3};
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::os::raw::c_void;
 
-use crate::physics::{PhysicsManager};
-use std::time;
+use crate::physics::PhysicsManager;
 use crate::player::{PlayerPhysicsState, PlayerProperties};
-
+use std::time;
 
 fn main() {
     let (mut glfw, mut window, events) = create_window(WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_NAME);
@@ -80,10 +79,11 @@ fn main() {
         WINDOW_WIDTH as i32,
         WINDOW_HEIGHT as i32
     ));
-    
+
     // Generate Texture Atlas
     let (atlas, uv_map) = generate_texture_atlas();
-    let mut voxel_shader = ShaderProgram::compile("src/shaders/voxel.vert", "src/shaders/voxel.frag");
+    let mut voxel_shader =
+        ShaderProgram::compile("src/shaders/voxel.vert", "src/shaders/voxel.frag");
 
     let mut player_properties = PlayerProperties::new();
     let mut physics_manager = PhysicsManager::new(
@@ -120,8 +120,8 @@ fn main() {
                 }
 
                 glfw::WindowEvent::MouseButton(button, Action::Press, _) => {
-                    let is_solid_block_at = |x: i32, y: i32, z: i32|
-                        chunk_manager.is_solid_block_at(x, y, z);
+                    let is_solid_block_at =
+                        |x: i32, y: i32, z: i32| chunk_manager.is_solid_block_at(x, y, z);
 
                     let fw = player_properties.rotation.forward();
                     let player = physics_manager.get_current_state();
@@ -148,12 +148,16 @@ fn main() {
                                 ));
 
                                 if !player.aabb.intersects(&adjacent_block_aabb) {
-                                    chunk_manager.set_block(adjacent_block.x, adjacent_block.y, adjacent_block.z, BlockID::Debug2);
+                                    chunk_manager.set_block(
+                                        adjacent_block.x,
+                                        adjacent_block.y,
+                                        adjacent_block.z,
+                                        BlockID::Debug2,
+                                    );
                                 }
                             }
                             _ => {}
                         }
-                        
                     }
                 }
 
@@ -161,15 +165,15 @@ fn main() {
             }
         }
 
-        
-        let player_physics_state = physics_manager.update_player_physics(&input_cache, &chunk_manager, &player_properties);
+        let player_physics_state =
+            physics_manager.update_player_physics(&input_cache, &chunk_manager, &player_properties);
         let looking_dir = player_properties.rotation.forward();
         let view_matrix = {
             let camera_position = player_physics_state.get_camera_position();
             nalgebra_glm::look_at(
-            &camera_position,
-            &(camera_position + looking_dir),
-            &Vector3::y(),
+                &camera_position,
+                &(camera_position + looking_dir),
+                &Vector3::y(),
             )
         };
 

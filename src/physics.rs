@@ -3,7 +3,7 @@ use crate::player::{PlayerPhysicsState, PlayerProperties};
 use crate::{chunk_manager, time, GRAVITY};
 use nalgebra_glm::{vec3, Vec3};
 
-use crate::constants::{PLAYER_HALF_WIDTH};
+use crate::constants::PLAYER_HALF_WIDTH;
 
 pub struct PhysicsManager {
     pub t: f32,
@@ -102,5 +102,4 @@ impl PhysicsManager {
             player
         })
     }
-
 }

@@ -196,9 +196,11 @@ impl ShaderProgram {
 
     pub fn compile(vertex: &str, fragment: &str) -> ShaderProgram {
         let vert =
-            ShaderPart::from_vert_source(&CString::new(read_to_string(vertex).unwrap()).unwrap()).unwrap();
+            ShaderPart::from_vert_source(&CString::new(read_to_string(vertex).unwrap()).unwrap())
+                .unwrap();
         let frag =
-            ShaderPart::from_frag_source(&CString::new(read_to_string(fragment).unwrap()).unwrap()).unwrap();
+            ShaderPart::from_frag_source(&CString::new(read_to_string(fragment).unwrap()).unwrap())
+                .unwrap();
 
         ShaderProgram::from_shaders(vert, frag).unwrap()
     }
