@@ -37,6 +37,18 @@ fn create_vao_vbo() -> (u32, u32) {
     ));
     gl_call!(gl::VertexArrayAttribBinding(vao, 1, 0));
 
+    // Normals
+    gl_call!(gl::EnableVertexArrayAttrib(vao, 2));
+    gl_call!(gl::VertexArrayAttribFormat(
+        vao,
+        2,
+        3_i32,
+        gl::FLOAT,
+        gl::FALSE,
+        (5 * std::mem::size_of::<f32>()) as u32
+    ));
+    gl_call!(gl::VertexArrayAttribBinding(vao, 2, 0));
+
     let mut vbo = 0;
     gl_call!(gl::CreateBuffers(1, &mut vbo));
 
@@ -45,7 +57,7 @@ fn create_vao_vbo() -> (u32, u32) {
         0,
         vbo,
         0,
-        (5 * std::mem::size_of::<f32>()) as i32
+        (8 * std::mem::size_of::<f32>()) as i32
     ));
 
     (vao, vbo)

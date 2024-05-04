@@ -183,7 +183,7 @@ impl ChunkManager {
 
         // Update the VBOs of the dirty chunks
         for coords in dirty_chunks.iter() {
-            let chunk = self.loaded_chunks.get_mut(coords);
+            let chunk: Option<&mut Chunk> = self.loaded_chunks.get_mut(coords);
 
             // We check for a valid chunk because the chunk might have been removed
             if let Some(chunk) = chunk {
@@ -203,7 +203,7 @@ impl ChunkManager {
 
                 gl_call!(gl::NamedBufferData(
                     chunk.vbo,
-                    (180 * std::mem::size_of::<f32>() * n_visible_faces as usize) as isize,
+                    (6 * 6 * 8 * std::mem::size_of::<f32>() * n_visible_faces as usize) as isize,
                     std::ptr::null(),
                     gl::DYNAMIC_DRAW
                 ));
@@ -233,7 +233,7 @@ impl ChunkManager {
                         };
 
                         chunk.vertices_drawn += copied_vertices;
-                        idx += copied_vertices as isize * 5;
+                        idx += copied_vertices as isize * 8;
                         cnt += 1;
                     }
                 }

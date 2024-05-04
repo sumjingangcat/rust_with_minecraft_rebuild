@@ -20,7 +20,7 @@ pub unsafe fn write_unit_cube_to_ptr(
     [right, left, top, bottom, front, back]: [bool; 6],
 ) -> u32 {
 
-    let vertex_size = 5; // 3 for position, 2 for uv
+    let vertex_size = 8; // 3 for position, 2 for uv, 3 for normal
     let vertex_per_face = 6; // 2 triangles * 3 vertices
     let face_size = vertex_size * vertex_per_face;
 
@@ -29,12 +29,12 @@ pub unsafe fn write_unit_cube_to_ptr(
 
     if front {
         ptr.offset(idx).copy_from_nonoverlapping([
-            0.0 + x, 0.0 + y, 1.0 + z, front_uv.0, front_uv.1,
-            1.0 + x, 0.0 + y, 1.0 + z, front_uv.2, front_uv.1,
-            1.0 + x, 1.0 + y, 1.0 + z, front_uv.2, front_uv.3,
-            1.0 + x, 1.0 + y, 1.0 + z, front_uv.2, front_uv.3,
-            0.0 + x, 1.0 + y, 1.0 + z, front_uv.0, front_uv.3,
-            0.0 + x, 0.0 + y, 1.0 + z, front_uv.0, front_uv.1,
+            0.0 + x, 0.0 + y, 1.0 + z, front_uv.0, front_uv.1, 0.0, 0.0, 1.0,
+            1.0 + x, 0.0 + y, 1.0 + z, front_uv.2, front_uv.1, 0.0, 0.0, 1.0,
+            1.0 + x, 1.0 + y, 1.0 + z, front_uv.2, front_uv.3, 0.0, 0.0, 1.0,
+            1.0 + x, 1.0 + y, 1.0 + z, front_uv.2, front_uv.3, 0.0, 0.0, 1.0,
+            0.0 + x, 1.0 + y, 1.0 + z, front_uv.0, front_uv.3, 0.0, 0.0, 1.0,
+            0.0 + x, 0.0 + y, 1.0 + z, front_uv.0, front_uv.1, 0.0, 0.0, 1.0,
         ].as_ptr(), face_size);
 
         idx += face_size as isize;
@@ -43,12 +43,12 @@ pub unsafe fn write_unit_cube_to_ptr(
 
     if back {
         ptr.offset(idx).copy_from_nonoverlapping([
-            1.0 + x, 0.0 + y, 0.0 + z, back_uv.0, back_uv.1,
-            0.0 + x, 0.0 + y, 0.0 + z, back_uv.2, back_uv.1,
-            0.0 + x, 1.0 + y, 0.0 + z, back_uv.2, back_uv.3,
-            0.0 + x, 1.0 + y, 0.0 + z, back_uv.2, back_uv.3,
-            1.0 + x, 1.0 + y, 0.0 + z, back_uv.0, back_uv.3,
-            1.0 + x, 0.0 + y, 0.0 + z, back_uv.0, back_uv.1,
+            1.0 + x, 0.0 + y, 0.0 + z, back_uv.0, back_uv.1, 0.0, 0.0, -1.0,
+            0.0 + x, 0.0 + y, 0.0 + z, back_uv.2, back_uv.1, 0.0, 0.0, -1.0,
+            0.0 + x, 1.0 + y, 0.0 + z, back_uv.2, back_uv.3, 0.0, 0.0, -1.0,
+            0.0 + x, 1.0 + y, 0.0 + z, back_uv.2, back_uv.3, 0.0, 0.0, -1.0,
+            1.0 + x, 1.0 + y, 0.0 + z, back_uv.0, back_uv.3, 0.0, 0.0, -1.0,
+            1.0 + x, 0.0 + y, 0.0 + z, back_uv.0, back_uv.1, 0.0, 0.0, -1.0,
         ].as_ptr(), face_size);
 
         idx += face_size as isize;
@@ -57,12 +57,12 @@ pub unsafe fn write_unit_cube_to_ptr(
 
     if left {
         ptr.offset(idx).copy_from_nonoverlapping([
-            0.0 + x, 0.0 + y, 0.0 + z, left_uv.0, left_uv.1,
-            0.0 + x, 0.0 + y, 1.0 + z, left_uv.2, left_uv.1,
-            0.0 + x, 1.0 + y, 1.0 + z, left_uv.2, left_uv.3,
-            0.0 + x, 1.0 + y, 1.0 + z, left_uv.2, left_uv.3,
-            0.0 + x, 1.0 + y, 0.0 + z, left_uv.0, left_uv.3,
-            0.0 + x, 0.0 + y, 0.0 + z, left_uv.0, left_uv.1,
+            0.0 + x, 0.0 + y, 0.0 + z, left_uv.0, left_uv.1, -1.0, 0.0, 0.0,
+            0.0 + x, 0.0 + y, 1.0 + z, left_uv.2, left_uv.1, -1.0, 0.0, 0.0,
+            0.0 + x, 1.0 + y, 1.0 + z, left_uv.2, left_uv.3, -1.0, 0.0, 0.0,
+            0.0 + x, 1.0 + y, 1.0 + z, left_uv.2, left_uv.3, -1.0, 0.0, 0.0,
+            0.0 + x, 1.0 + y, 0.0 + z, left_uv.0, left_uv.3, -1.0, 0.0, 0.0,
+            0.0 + x, 0.0 + y, 0.0 + z, left_uv.0, left_uv.1, -1.0, 0.0, 0.0,
         ].as_ptr(), face_size);
 
         idx += face_size as isize;
@@ -71,12 +71,12 @@ pub unsafe fn write_unit_cube_to_ptr(
 
     if right {
         ptr.offset(idx).copy_from_nonoverlapping([
-            1.0 + x, 0.0 + y, 1.0 + z, right_uv.0, right_uv.1,
-            1.0 + x, 0.0 + y, 0.0 + z, right_uv.2, right_uv.1,
-            1.0 + x, 1.0 + y, 0.0 + z, right_uv.2, right_uv.3,
-            1.0 + x, 1.0 + y, 0.0 + z, right_uv.2, right_uv.3,
-            1.0 + x, 1.0 + y, 1.0 + z, right_uv.0, right_uv.3,
-            1.0 + x, 0.0 + y, 1.0 + z, right_uv.0, right_uv.1,
+            1.0 + x, 0.0 + y, 1.0 + z, right_uv.0, right_uv.1, 1.0, 0.0, 0.0,
+            1.0 + x, 0.0 + y, 0.0 + z, right_uv.2, right_uv.1, 1.0, 0.0, 0.0,
+            1.0 + x, 1.0 + y, 0.0 + z, right_uv.2, right_uv.3, 1.0, 0.0, 0.0,
+            1.0 + x, 1.0 + y, 0.0 + z, right_uv.2, right_uv.3, 1.0, 0.0, 0.0,
+            1.0 + x, 1.0 + y, 1.0 + z, right_uv.0, right_uv.3, 1.0, 0.0, 0.0,
+            1.0 + x, 0.0 + y, 1.0 + z, right_uv.0, right_uv.1, 1.0, 0.0, 0.0,
         ].as_ptr(), face_size);
 
         idx += face_size as isize;
@@ -85,12 +85,12 @@ pub unsafe fn write_unit_cube_to_ptr(
 
     if top {
         ptr.offset(idx).copy_from_nonoverlapping([
-            0.0 + x, 1.0 + y, 1.0 + z, top_uv.0, top_uv.1,
-            1.0 + x, 1.0 + y, 1.0 + z, top_uv.2, top_uv.1,
-            1.0 + x, 1.0 + y, 0.0 + z, top_uv.2, top_uv.3,
-            1.0 + x, 1.0 + y, 0.0 + z, top_uv.2, top_uv.3,
-            0.0 + x, 1.0 + y, 0.0 + z, top_uv.0, top_uv.3,
-            0.0 + x, 1.0 + y, 1.0 + z, top_uv.0, top_uv.1,
+            0.0 + x, 1.0 + y, 1.0 + z, top_uv.0, top_uv.1, 0.0, 1.0, 0.0,
+            1.0 + x, 1.0 + y, 1.0 + z, top_uv.2, top_uv.1, 0.0, 1.0, 0.0,
+            1.0 + x, 1.0 + y, 0.0 + z, top_uv.2, top_uv.3, 0.0, 1.0, 0.0,
+            1.0 + x, 1.0 + y, 0.0 + z, top_uv.2, top_uv.3, 0.0, 1.0, 0.0,
+            0.0 + x, 1.0 + y, 0.0 + z, top_uv.0, top_uv.3, 0.0, 1.0, 0.0,
+            0.0 + x, 1.0 + y, 1.0 + z, top_uv.0, top_uv.1, 0.0, 1.0, 0.0,
         ].as_ptr(), face_size);
 
         idx += face_size as isize;
@@ -99,12 +99,12 @@ pub unsafe fn write_unit_cube_to_ptr(
 
     if bottom {
         ptr.offset(idx).copy_from_nonoverlapping([
-            0.0 + x, 0.0 + y, 0.0 + z, bottom_uv.0, bottom_uv.1,
-            1.0 + x, 0.0 + y, 0.0 + z, bottom_uv.2, bottom_uv.1,
-            1.0 + x, 0.0 + y, 1.0 + z, bottom_uv.2, bottom_uv.3,
-            1.0 + x, 0.0 + y, 1.0 + z, bottom_uv.2, bottom_uv.3,
-            0.0 + x, 0.0 + y, 1.0 + z, bottom_uv.0, bottom_uv.3,
-            0.0 + x, 0.0 + y, 0.0 + z, bottom_uv.0, bottom_uv.1,
+            0.0 + x, 0.0 + y, 0.0 + z, bottom_uv.0, bottom_uv.1, 0.0, -1.0, 0.0,
+            1.0 + x, 0.0 + y, 0.0 + z, bottom_uv.2, bottom_uv.1, 0.0, -1.0, 0.0,
+            1.0 + x, 0.0 + y, 1.0 + z, bottom_uv.2, bottom_uv.3, 0.0, -1.0, 0.0,
+            1.0 + x, 0.0 + y, 1.0 + z, bottom_uv.2, bottom_uv.3, 0.0, -1.0, 0.0,
+            0.0 + x, 0.0 + y, 1.0 + z, bottom_uv.0, bottom_uv.3, 0.0, -1.0, 0.0,
+            0.0 + x, 0.0 + y, 0.0 + z, bottom_uv.0, bottom_uv.1, 0.0, -1.0, 0.0,
         ].as_ptr(), face_size);
 
         copied_vertices += vertex_per_face;
