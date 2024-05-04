@@ -26,6 +26,7 @@ pub mod window;
 
 use crate::aabb::get_block_aabb;
 use crate::constants::*;
+use crate::gui::create_block_outline_vao;
 use crate::input::InputCache;
 use crate::texture_pack::*;
 use crate::window::*;
@@ -39,6 +40,7 @@ use crate::chunk_manager::ChunkManager;
 
 use glfw::ffi::glfwSwapInterval;
 use glfw::{Action, Context, Key, MouseButton, WindowHint};
+use nalgebra::Matrix4;
 use nalgebra::Vector3;
 use nalgebra_glm::{pi, vec3, IVec3, Vec2, Vec3};
 use std::collections::HashMap;
@@ -96,8 +98,10 @@ fn main() {
         ShaderProgram::compile("src/shaders/voxel.vert", "src/shaders/voxel.frag");
 
     let mut gui_shader = ShaderProgram::compile("src/shaders/gui.vert", "src/shaders/gui.frag");
+    let mut outline_shader = ShaderProgram::compile("src/shaders/outline.vert", "src/shaders/outline.frag");
 
-    let gui_vao = create_crosshair_vao();
+    let crosshair_vao = create_crosshair_vao();
+    let block_outline_vao = create_block_outline_vao();
 
     let mut player_properties = PlayerProperties::new();
     let mut physics_manager = PhysicsManager::new(
@@ -116,6 +120,21 @@ fn main() {
 
     // 메인 루프
     while !window.should_close() {
+        // Get looking block coords
+        let looking_block = {
+            let is_solid_block_at = |x: i32, y: i32, z: i32| chunk_manager.is_solid_block_at(x, y, z);
+            let forward = player_properties.rotation.forward();
+            let player = physics_manager.get_current_state();
+
+            raycast::raycast(
+                &is_solid_block_at,
+                &player.get_camera_position(),
+                &forward.normalize(),
+                REACH_DISTANCE,
+            )
+        };
+
+
         // 이벤트를 받고 처리
         glfw.poll_events();
 
@@ -134,20 +153,9 @@ fn main() {
                 }
 
                 glfw::WindowEvent::MouseButton(button, Action::Press, _) => {
-                    let is_solid_block_at =
-                        |x: i32, y: i32, z: i32| chunk_manager.is_solid_block_at(x, y, z);
-
-                    let fw = player_properties.rotation.forward();
-                    let player = physics_manager.get_current_state();
-
-                    let block_hit = raycast::raycast(
-                        &is_solid_block_at,
-                        &player.get_camera_position(),
-                        &fw.normalize(),
-                        REACH_DISTANCE,
-                    );
-
-                    if let Some(((x, y, z), normal)) = block_hit {
+                    // [TODO] - &looking_block
+                    
+                    if let &Some(((x, y, z), normal)) = &looking_block {
                         match button {
                             MouseButton::Button1 => {
                                 chunk_manager.set_block(x, y, z, BlockID::Air);
@@ -160,6 +168,8 @@ fn main() {
                                     adjacent_block.y as f32,
                                     adjacent_block.z as f32,
                                 ));
+
+                                let player = physics_manager.get_current_state();
 
                                 if !player.aabb.intersects(&adjacent_block_aabb) {
                                     chunk_manager.set_block(
@@ -184,22 +194,22 @@ fn main() {
 
         chunk_manager.rebuild_dirty_chunks(&uv_map);
 
+        let view_matrix = {
+            let camera_position = player_physics_state.get_camera_position();
+            let looking_dir = player_properties.rotation.forward();
+
+            nalgebra_glm::look_at(
+                &camera_position,
+                &(camera_position + looking_dir),
+                &Vector3::y(),
+            )
+        };
+
+        let projection_matrix =
+            nalgebra_glm::perspective(1.0, pi::<f32>() / 2.0, NEAR_PLANE, FAR_PLANE);
+
         // Draw chunks
         {
-            let view_matrix = {
-                let camera_position = player_physics_state.get_camera_position();
-                let looking_dir = player_properties.rotation.forward();
-
-                nalgebra_glm::look_at(
-                    &camera_position,
-                    &(camera_position + looking_dir),
-                    &Vector3::y(),
-                )
-            };
-
-            let projection_matrix =
-                nalgebra_glm::perspective(1.0, pi::<f32>() / 2.0, NEAR_PLANE, FAR_PLANE);
-
             voxel_shader.use_program();
 
             voxel_shader.set_uniform_matrix4fv("view", view_matrix.as_ptr());
@@ -213,10 +223,28 @@ fn main() {
 
             chunk_manager.render_loaded_chunks(&mut voxel_shader);
         }
+        
+        {
+            if let Some(((x, y, z), _)) = looking_block {
+                let (x, y, z) = (x as f32, y as f32, z as f32);
+                let model_matrix = Matrix4::new_translation(&vec3(x, y, z));
+
+                outline_shader.use_program();
+                unsafe{
+                    outline_shader.set_uniform_matrix4fv("model", model_matrix.as_ptr());
+                    outline_shader.set_uniform_matrix4fv("view", view_matrix.as_ptr());
+                    outline_shader.set_uniform_matrix4fv("projection", projection_matrix.as_ptr());
+                }
+
+                gl_call!(gl::LineWidth(BLOCK_OUTLINE_WIDTH));
+                gl_call!(gl::BindVertexArray(block_outline_vao));
+                gl_call!(gl::DrawArrays(gl::LINES, 0, 24));
+            }
+        }
 
         // Draw GUI
         {
-            draw_crosshair(gui_vao, &mut gui_shader);
+            draw_crosshair(crosshair_vao, &mut gui_shader);
         }
 
         // 프론트 버퍼와 백 버퍼 교체 - 프리징 방지

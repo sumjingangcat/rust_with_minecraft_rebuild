@@ -5,7 +5,7 @@ use image::ColorType;
 use nalgebra::Matrix4;
 use nalgebra_glm::vec3;
 
-use crate::{shader::ShaderProgram, shapes::quad, CROSSHAIR_SIZE, WINDOW_HEIGHT, WINDOW_WIDTH};
+use crate::{shader::ShaderProgram, shapes::{block_outline, quad}, CROSSHAIR_SIZE, WINDOW_HEIGHT, WINDOW_WIDTH};
 
 pub fn create_gui_icons_texture() -> u32 {
     let gui_icons_image = match image::open("textures/gui/icons.png") {
@@ -140,4 +140,43 @@ pub fn draw_crosshair(vao: u32, shader: &mut ShaderProgram) {
     gl_call!(gl::BlendFunc(gl::ONE_MINUS_DST_COLOR, gl::ZERO));
     gl_call!(gl::BindVertexArray(vao));
     gl_call!(gl::DrawArrays(gl::TRIANGLES, 0, 6));
+}
+
+pub fn create_block_outline_vao() -> u32 {
+    // Setup VAO
+    let mut vao = 0;
+    gl_call!(gl::CreateVertexArrays(1, &mut vao));
+
+    // Position
+    gl_call!(gl::EnableVertexArrayAttrib(vao, 0));
+    gl_call!(gl::VertexArrayAttribFormat(
+        vao,       // vao 객체
+        0,         // 속성 번호
+        3,         // 크기 (float 개수)
+        gl::FLOAT, // 데이터 타입
+        gl::FALSE, // 정규화 여부
+        0          // VBO에서의 시작 위치
+    ));
+    gl_call!(gl::VertexArrayAttribBinding(vao, 0, 0));
+
+    // VBO
+    let mut vbo = 0;
+    gl_call!(gl::CreateBuffers(1, &mut vbo));
+
+    gl_call!(gl::VertexArrayVertexBuffer(
+        vao,
+        0,
+        vbo,
+        0,
+        (3 * std::mem::size_of::<f32>()) as i32
+    ));
+
+    gl_call!(gl::NamedBufferData(
+        vbo,
+        (72 * std::mem::size_of::<f32>()) as isize,
+        block_outline().as_ptr() as *const c_void,
+        gl::STATIC_DRAW
+    ));
+
+    vao
 }

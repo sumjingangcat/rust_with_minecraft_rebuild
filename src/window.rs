@@ -1,7 +1,7 @@
 use std::sync::mpsc::Receiver;
 
 use crate::constants::{OPENGL_MAJOR_VERSION, OPENGL_MINOR_VERSION};
-use glfw::{self, Context, CursorMode, Glfw, OpenGlProfileHint, Window, WindowEvent, WindowHint};
+use glfw::{self, ffi::glfwSwapInterval, Context, CursorMode, Glfw, OpenGlProfileHint, Window, WindowEvent, WindowHint};
 
 pub fn create_window(
     width: u32,
@@ -18,16 +18,16 @@ pub fn create_window(
     glfw.window_hint(WindowHint::OpenGlProfile(glfw::OpenGlProfileHint::Core));
     glfw.window_hint(WindowHint::OpenGlDebugContext(true));
 
-    // 수직 동기화(Vsync)
-    // Uncomment the following line to disable vsync
-    // unsafe { glfwSwapInterval(0) };
-
     // 윈도우 창 생성
     let (mut window, events) = glfw
         .create_window(width, height, title, glfw::WindowMode::Windowed)
         .expect("Failed to create GLFW window");
 
     gl::load_with(|symbol| window.get_proc_address(symbol) as *const _);
+
+    // 수직 동기화(Vsync)
+    // Uncomment the following line to disable vsync
+    unsafe { glfwSwapInterval(0) };
 
     // 윈도우의 context 설정
     window.make_current();
