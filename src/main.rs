@@ -27,6 +27,9 @@ pub mod window;
 use crate::aabb::get_block_aabb;
 use crate::constants::*;
 use crate::gui::create_block_outline_vao;
+use crate::gui::create_hotbar_vao;
+use crate::gui::create_widgets_texture;
+use crate::gui::draw_hotbar;
 use crate::input::InputCache;
 use crate::texture_pack::*;
 use crate::window::*;
@@ -94,6 +97,10 @@ fn main() {
     gl_call!(gl::ActiveTexture(gl::TEXTURE1));
     gl_call!(gl::BindTexture(gl::TEXTURE_2D, gui_icons_texture));
 
+    let gui_widgets_texture = create_widgets_texture();
+    gl_call!(gl::ActiveTexture(gl::TEXTURE2));
+    gl_call!(gl::BindTexture(gl::TEXTURE_2D, gui_widgets_texture));
+
     let mut voxel_shader =
         ShaderProgram::compile("src/shaders/voxel.vert", "src/shaders/voxel.frag");
 
@@ -102,6 +109,7 @@ fn main() {
 
     let crosshair_vao = create_crosshair_vao();
     let block_outline_vao = create_block_outline_vao();
+    let hotbar_vao = create_hotbar_vao();
 
     let mut player_properties = PlayerProperties::new();
     let mut physics_manager = PhysicsManager::new(
@@ -245,6 +253,8 @@ fn main() {
         // Draw GUI
         {
             draw_crosshair(crosshair_vao, &mut gui_shader);
+            gl_call!(gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA));
+            draw_hotbar(hotbar_vao, &mut gui_shader);
         }
 
         // 프론트 버퍼와 백 버퍼 교체 - 프리징 방지
