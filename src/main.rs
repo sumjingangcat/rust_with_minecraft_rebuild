@@ -9,9 +9,11 @@ pub mod block_texture_sides;
 pub mod chunk;
 pub mod chunk_manager;
 pub mod constants;
+pub mod drawing;
 pub mod ecs;
 pub mod gui;
 pub mod input;
+pub mod inventory;
 pub mod physics;
 pub mod player;
 pub mod raycast;
@@ -29,7 +31,6 @@ use crate::constants::*;
 use crate::gui::create_block_outline_vao;
 use crate::gui::create_hotbar_vao;
 use crate::gui::create_widgets_texture;
-use crate::gui::draw_hotbar;
 use crate::input::InputCache;
 use crate::texture_pack::*;
 use crate::window::*;
@@ -41,6 +42,7 @@ use crate::util::Forward;
 use crate::chunk::BlockID;
 use crate::chunk_manager::ChunkManager;
 
+use crate::inventory::Inventory;
 use glfw::ffi::glfwSwapInterval;
 use glfw::{Action, Context, Key, MouseButton, WindowHint};
 use nalgebra::Matrix4;
@@ -54,7 +56,9 @@ use crate::physics::PhysicsManager;
 use crate::player::{PlayerPhysicsState, PlayerProperties};
 use std::time;
 
-use crate::gui::{create_crosshair_vao, create_gui_icons_texture, draw_crosshair};
+use crate::gui::{
+    create_crosshair_vao, create_gui_icons_texture, create_hotbar_selection_vao, draw_crosshair,
+};
 
 fn main() {
     let (mut glfw, mut window, events) = create_window(WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_NAME);
@@ -105,12 +109,16 @@ fn main() {
         ShaderProgram::compile("src/shaders/voxel.vert", "src/shaders/voxel.frag");
 
     let mut gui_shader = ShaderProgram::compile("src/shaders/gui.vert", "src/shaders/gui.frag");
-    let mut outline_shader = ShaderProgram::compile("src/shaders/outline.vert", "src/shaders/outline.frag");
+    let mut outline_shader =
+        ShaderProgram::compile("src/shaders/outline.vert", "src/shaders/outline.frag");
+    let mut item_shader = ShaderProgram::compile("src/shaders/item.vert", "src/shaders/item.frag");
 
     let crosshair_vao = create_crosshair_vao();
     let block_outline_vao = create_block_outline_vao();
     let hotbar_vao = create_hotbar_vao();
+    let hotbar_selection_vao = create_hotbar_selection_vao();
 
+    let mut inventory = Inventory::new(&uv_map);
     let mut player_properties = PlayerProperties::new();
     let mut physics_manager = PhysicsManager::new(
         1.0 / 60.0,
@@ -130,7 +138,8 @@ fn main() {
     while !window.should_close() {
         // Get looking block coords
         let looking_block = {
-            let is_solid_block_at = |x: i32, y: i32, z: i32| chunk_manager.is_solid_block_at(x, y, z);
+            let is_solid_block_at =
+                |x: i32, y: i32, z: i32| chunk_manager.is_solid_block_at(x, y, z);
             let forward = player_properties.rotation.forward();
             let player = physics_manager.get_current_state();
 
@@ -142,12 +151,13 @@ fn main() {
             )
         };
 
-
         // 이벤트를 받고 처리
         glfw.poll_events();
 
         for (_, event) in glfw::flush_messages(&events) {
             input_cache.handle_event(&event);
+            inventory.handle_input_event(&event);
+
             match event {
                 glfw::WindowEvent::Key(Key::Escape, _, Action::Press, _) => {
                     window.set_should_close(true);
@@ -162,7 +172,7 @@ fn main() {
 
                 glfw::WindowEvent::MouseButton(button, Action::Press, _) => {
                     // [TODO] - &looking_block
-                    
+
                     if let &Some(((x, y, z), normal)) = &looking_block {
                         match button {
                             MouseButton::Button1 => {
@@ -180,12 +190,14 @@ fn main() {
                                 let player = physics_manager.get_current_state();
 
                                 if !player.aabb.intersects(&adjacent_block_aabb) {
-                                    chunk_manager.set_block(
-                                        adjacent_block.x,
-                                        adjacent_block.y,
-                                        adjacent_block.z,
-                                        BlockID::Debug2,
-                                    );
+                                    if let Some(block) = inventory.get_selected_item() {
+                                        chunk_manager.set_block(
+                                            adjacent_block.x,
+                                            adjacent_block.y,
+                                            adjacent_block.z,
+                                            block,
+                                        );
+                                    }
                                 }
                             }
                             _ => {}
@@ -213,8 +225,12 @@ fn main() {
             )
         };
 
-        let projection_matrix =
-            nalgebra_glm::perspective(1.0, pi::<f32>() / 2.0, NEAR_PLANE, FAR_PLANE);
+        let projection_matrix = nalgebra_glm::perspective(
+            WINDOW_WIDTH as f32 / WINDOW_HEIGHT as f32,
+            FOV,
+            NEAR_PLANE,
+            FAR_PLANE,
+        );
 
         // Draw chunks
         {
@@ -231,14 +247,14 @@ fn main() {
 
             chunk_manager.render_loaded_chunks(&mut voxel_shader);
         }
-        
+
         {
             if let Some(((x, y, z), _)) = looking_block {
                 let (x, y, z) = (x as f32, y as f32, z as f32);
                 let model_matrix = Matrix4::new_translation(&vec3(x, y, z));
 
                 outline_shader.use_program();
-                unsafe{
+                unsafe {
                     outline_shader.set_uniform_matrix4fv("model", model_matrix.as_ptr());
                     outline_shader.set_uniform_matrix4fv("view", view_matrix.as_ptr());
                     outline_shader.set_uniform_matrix4fv("projection", projection_matrix.as_ptr());
@@ -254,7 +270,11 @@ fn main() {
         {
             draw_crosshair(crosshair_vao, &mut gui_shader);
             gl_call!(gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA));
-            draw_hotbar(hotbar_vao, &mut gui_shader);
+            gl_call!(gl::Disable(gl::DEPTH_TEST));
+            inventory.draw_hotbar(hotbar_vao, &mut gui_shader);
+            inventory.draw_hotbar_selection_box(hotbar_selection_vao, &mut gui_shader);
+            inventory.draw_hotbar_items(&mut item_shader);
+            gl_call!(gl::Enable(gl::DEPTH_TEST));
         }
 
         // 프론트 버퍼와 백 버퍼 교체 - 프리징 방지

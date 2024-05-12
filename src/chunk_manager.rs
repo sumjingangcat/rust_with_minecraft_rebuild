@@ -1,4 +1,4 @@
-use crate::block_texture_sides::{get_uv_every_side, BlockFaces};
+use crate::block_texture_sides::BlockFaces;
 use crate::shader::ShaderProgram;
 use crate::types::UVCoords;
 use crate::{
@@ -57,7 +57,8 @@ impl ChunkManager {
                 self.set_block(x, y, z, BlockID::Grass);
                 self.set_block(x, y - 1, z, BlockID::Dirt);
                 self.set_block(x, y - 2, z, BlockID::Dirt);
-                self.set_block(x, y - 3, z, BlockID::Cobblestone);
+                self.set_block(x, y - 3, z, BlockID::Dirt);
+                self.set_block(x, y - 4, z, BlockID::Cobblestone);
 
                 if random::<u32>() % 100 == 0 {
                     let h = 5;
@@ -221,7 +222,7 @@ impl ChunkManager {
                         let active_sides = sides_vec[cnt];
 
                         let uvs = uv_map.get(&block).unwrap().clone();
-                        let uvs = get_uv_every_side(uvs);
+                        let uvs = uvs.get_uv_of_every_faces();
 
                         let copied_vertices = unsafe {
                             write_unit_cube_to_ptr(

@@ -1,7 +1,10 @@
 use std::sync::mpsc::Receiver;
 
 use crate::constants::{OPENGL_MAJOR_VERSION, OPENGL_MINOR_VERSION};
-use glfw::{self, ffi::glfwSwapInterval, Context, CursorMode, Glfw, OpenGlProfileHint, Window, WindowEvent, WindowHint};
+use glfw::{
+    self, ffi::glfwSwapInterval, Context, CursorMode, Glfw, OpenGlProfileHint, Window, WindowEvent,
+    WindowHint,
+};
 
 pub fn create_window(
     width: u32,
@@ -36,6 +39,7 @@ pub fn create_window(
     window.set_cursor_pos_polling(true);
     window.set_raw_mouse_motion(true);
     window.set_mouse_button_polling(true);
+    window.set_scroll_polling(true);
     window.set_cursor_mode(CursorMode::Disabled);
 
     (glfw, window, events)

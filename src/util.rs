@@ -7,9 +7,9 @@ pub trait Forward {
 impl Forward for Vec3 {
     fn forward(&self) -> Self {
         vec3(
-            self.x.cos() * self.y.cos(),
-            self.y.sin(),
             self.x.cos() * self.y.sin(),
+            self.x.sin(),
+            self.x.cos() * self.y.cos(),
         )
     }
 }

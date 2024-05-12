@@ -26,8 +26,8 @@ impl PlayerProperties {
     }
 
     pub fn rotate_camera(&mut self, horizontal: f32, vertical: f32) {
-        self.rotation.y += horizontal as f32 / 100.0 * MOUSE_SENSITIVITY_X;
-        self.rotation.x += vertical as f32 / 100.0 * MOUSE_SENSITIVITY_Y;
+        self.rotation.y -= horizontal as f32 / 100.0 * MOUSE_SENSITIVITY_X;
+        self.rotation.x -= vertical as f32 / 100.0 * MOUSE_SENSITIVITY_Y;
 
         self.rotation.x = clamp(
             self.rotation.x,
@@ -122,11 +122,11 @@ impl PlayerPhysicsState {
         }
         if input_cache.is_key_pressed(Key::A) {
             directional_acceleration -=
-                -rotation.forward().cross(&Vector3::y()).cross(&Vector3::y());
+                rotation.forward().cross(&Vector3::y());
         }
         if input_cache.is_key_pressed(Key::D) {
             directional_acceleration +=
-                -rotation.forward().cross(&Vector3::y()).cross(&Vector3::y());
+                rotation.forward().cross(&Vector3::y());
         }
 
         if directional_acceleration.norm_squared() != 0.0 {

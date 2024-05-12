@@ -5,7 +5,11 @@ use image::ColorType;
 use nalgebra::Matrix4;
 use nalgebra_glm::vec3;
 
-use crate::{shader::ShaderProgram, shapes::{block_outline, quad}, CROSSHAIR_SIZE, WINDOW_HEIGHT, WINDOW_WIDTH};
+use crate::{
+    shader::ShaderProgram,
+    shapes::{block_outline, quad},
+    CROSSHAIR_SIZE, WINDOW_HEIGHT, WINDOW_WIDTH,
+};
 
 pub fn create_gui_icons_texture() -> u32 {
     let gui_icons_image = match image::open("textures/gui/icons.png") {
@@ -232,87 +236,103 @@ pub fn create_widgets_texture() -> u32 {
 }
 
 pub fn create_hotbar_vao() -> u32 {
-      // Setup VAO
-      let mut vao = 0;
-      gl_call!(gl::CreateVertexArrays(1, &mut vao));
-  
-      // Position
-      gl_call!(gl::EnableVertexArrayAttrib(vao, 0));
-      gl_call!(gl::VertexArrayAttribFormat(
-          vao,       // vao 객체
-          0,         // 속성 번호
-          3,         // 크기 (float 개수)
-          gl::FLOAT, // 데이터 타입
-          gl::FALSE, // 정규화 여부
-          0          // VBO에서의 시작 위치
-      ));
-      gl_call!(gl::VertexArrayAttribBinding(vao, 0, 0));
-  
-      // Texture Coords
-      gl_call!(gl::EnableVertexArrayAttrib(vao, 1));
-      gl_call!(gl::VertexArrayAttribFormat(
-          vao,
-          1,
-          2,
-          gl::FLOAT,
-          gl::FALSE,
-          (3 * std::mem::size_of::<f32>()) as u32
-      ));
-      gl_call!(gl::VertexArrayAttribBinding(vao, 1, 0));
-  
-      // VBO
-      let mut vbo = 0;
-      gl_call!(gl::CreateBuffers(1, &mut vbo));
-  
-      gl_call!(gl::VertexArrayVertexBuffer(
-          vao,
-          0,
-          vbo,
-          0,
-          (5 * std::mem::size_of::<f32>()) as i32
-      ));
-  
-      gl_call!(gl::NamedBufferData(
-          vbo,
-          (5 * 6 * std::mem::size_of::<f32>()) as isize,
-          quad((0.0, 0.0, 182.0 / 256.0, 22.0 / 256.0)).as_ptr() as *const c_void,
-          gl::STATIC_DRAW
-      ));
-  
-      vao
+    // Setup VAO
+    let mut vao = 0;
+    gl_call!(gl::CreateVertexArrays(1, &mut vao));
+
+    // Position
+    gl_call!(gl::EnableVertexArrayAttrib(vao, 0));
+    gl_call!(gl::VertexArrayAttribFormat(
+        vao,       // vao 객체
+        0,         // 속성 번호
+        3,         // 크기 (float 개수)
+        gl::FLOAT, // 데이터 타입
+        gl::FALSE, // 정규화 여부
+        0          // VBO에서의 시작 위치
+    ));
+    gl_call!(gl::VertexArrayAttribBinding(vao, 0, 0));
+
+    // Texture Coords
+    gl_call!(gl::EnableVertexArrayAttrib(vao, 1));
+    gl_call!(gl::VertexArrayAttribFormat(
+        vao,
+        1,
+        2,
+        gl::FLOAT,
+        gl::FALSE,
+        (3 * std::mem::size_of::<f32>()) as u32
+    ));
+    gl_call!(gl::VertexArrayAttribBinding(vao, 1, 0));
+
+    // VBO
+    let mut vbo = 0;
+    gl_call!(gl::CreateBuffers(1, &mut vbo));
+
+    gl_call!(gl::VertexArrayVertexBuffer(
+        vao,
+        0,
+        vbo,
+        0,
+        (5 * std::mem::size_of::<f32>()) as i32
+    ));
+
+    gl_call!(gl::NamedBufferData(
+        vbo,
+        (5 * 6 * std::mem::size_of::<f32>()) as isize,
+        quad((0.0, 0.0, 182.0 / 256.0, 22.0 / 256.0)).as_ptr() as *const c_void,
+        gl::STATIC_DRAW
+    ));
+
+    vao
 }
 
-pub fn draw_hotbar(vao: u32, shader: &mut ShaderProgram) {
-    let scale = 2.0;
+pub fn create_hotbar_selection_vao() -> u32 {
+    // Setup VAO
+    let mut vao = 0;
+    gl_call!(gl::CreateVertexArrays(1, &mut vao));
 
-    let model_matrix = {
-        let translate_matrix = Matrix4::new_translation(&vec3(
-            WINDOW_WIDTH as f32 / 2.0,
-            11.0 * scale,
-            0.0,
-        ));
-        let scale_matrix =
-            Matrix4::new_nonuniform_scaling(&vec3(182.0 * scale, 22.0 * scale, 1.0));
+    // Position
+    gl_call!(gl::EnableVertexArrayAttrib(vao, 0));
+    gl_call!(gl::VertexArrayAttribFormat(
+        vao,       // vao 객체
+        0,         // 속성 번호
+        3,         // 크기 (float 개수)
+        gl::FLOAT, // 데이터 타입
+        gl::FALSE, // 정규화 여부
+        0          // VBO에서의 시작 위치
+    ));
+    gl_call!(gl::VertexArrayAttribBinding(vao, 0, 0));
 
-        translate_matrix * scale_matrix
-    };
+    // Texture Coords
+    gl_call!(gl::EnableVertexArrayAttrib(vao, 1));
+    gl_call!(gl::VertexArrayAttribFormat(
+        vao,
+        1,
+        2,
+        gl::FLOAT,
+        gl::FALSE,
+        (3 * std::mem::size_of::<f32>()) as u32
+    ));
+    gl_call!(gl::VertexArrayAttribBinding(vao, 1, 0));
 
-    let projection_matrix = nalgebra_glm::ortho(
-        0.0,
-        WINDOW_WIDTH as f32,
-        0.0,
-        WINDOW_HEIGHT as f32,
-        -5.0,
-        5.0,
-    );
+    // VBO
+    let mut vbo = 0;
+    gl_call!(gl::CreateBuffers(1, &mut vbo));
 
-    shader.use_program();
-    unsafe {
-        shader.set_uniform_matrix4fv("model", model_matrix.as_ptr());
-        shader.set_uniform_matrix4fv("projection", projection_matrix.as_ptr());
-    }
-    shader.set_uniform1i("tex", 2);
+    gl_call!(gl::VertexArrayVertexBuffer(
+        vao,
+        0,
+        vbo,
+        0,
+        (5 * std::mem::size_of::<f32>()) as i32
+    ));
 
-    gl_call!(gl::BindVertexArray(vao));
-    gl_call!(gl::DrawArrays(gl::TRIANGLES, 0, 6));
+    gl_call!(gl::NamedBufferData(
+        vbo,
+        (5 * 6 * std::mem::size_of::<f32>()) as isize,
+        quad((0.0, 22.0 / 256.0, 24.0 / 256.0, 46.0 / 256.0)).as_ptr() as *const c_void,
+        gl::STATIC_DRAW
+    ));
+
+    vao
 }

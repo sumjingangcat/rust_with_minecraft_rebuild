@@ -26,6 +26,8 @@ impl InputCache {
                 self.cursor_rel_pos.y = y - self.last_cursor_pos.y;
                 self.last_cursor_pos.x = x;
                 self.last_cursor_pos.y = y;
+
+                println!("Cursor pos: ({}, {})", x, y);
             }
             &glfw::WindowEvent::Key(key, _, action, _) => {
                 self.key_states.insert(key, action);
