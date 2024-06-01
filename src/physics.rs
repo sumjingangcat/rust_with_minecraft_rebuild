@@ -2,20 +2,31 @@ use crate::input::InputCache;
 use crate::player::{PlayerPhysicsState, PlayerProperties};
 use crate::{chunk_manager, time, GRAVITY};
 use nalgebra_glm::{vec3, Vec3};
+use std::time::{Instant};
 
 use crate::constants::PLAYER_HALF_WIDTH;
 
-pub struct PhysicsManager {
+pub trait Interpolatable {
+    fn interpolate(&self, other: &Self, alpha: f32) -> Self;
+}
+
+impl Interpolatable for f32 {
+    fn interpolate(&self, other: &f32, alpha: f32) -> Self {
+        self * alpha + other * (1.0 - alpha)
+    }
+}
+
+pub struct Interpolator<T: Clone + Interpolatable> {
     pub t: f32,
     pub dt: f32,
     pub current_time: time::Instant,
     pub accumulator: f32,
-    pub previous_state: PlayerPhysicsState,
-    pub current_state: PlayerPhysicsState,
+    pub previous_state: T,
+    pub current_state: T,
 }
 
-impl PhysicsManager {
-    pub fn new(dt: f32, initial_state: PlayerPhysicsState) -> Self {
+impl<T:Clone + Interpolatable> Interpolator<T> {
+    pub fn new (dt: f32, initial_state: T) -> Self {
         Self {
             t: 0.0,
             dt,
@@ -26,15 +37,18 @@ impl PhysicsManager {
         }
     }
 
-    pub fn get_current_state(&mut self) -> &mut PlayerPhysicsState {
+    pub fn get_current_state(&mut self) -> &mut T {
         &mut self.current_state
     }
+}
 
+impl<T: Clone + Interpolatable> Interpolator<T> {
     pub fn step(
         &mut self,
-        integrate: &dyn Fn(PlayerPhysicsState, f32, f32) -> PlayerPhysicsState,
-    ) -> PlayerPhysicsState {
-        let now = time::Instant::now();
+        time: Instant,
+        integrate: &mut dyn FnMut(&T, f32, f32) -> T,
+    ) -> T {
+        let now = time;
         let mut frame_time = now.duration_since(self.current_time).as_secs_f32();
 
         if frame_time > 0.25 {
@@ -46,32 +60,42 @@ impl PhysicsManager {
 
         while self.accumulator >= self.dt {
             self.previous_state = self.current_state.clone();
-            self.current_state = integrate(self.current_state.clone(), self.t, self.dt);
+            self.current_state = integrate(&self.current_state.clone(), self.t, self.dt);
             self.t += self.dt;
             self.accumulator -= self.dt;
         }
 
         let alpha = self.accumulator / self.dt;
-        let state =
-            self.current_state.clone() * alpha + self.previous_state.clone() * (1.0 - alpha);
-
-        state
+        self.current_state.interpolate(&self.previous_state, alpha)
     }
+}
 
+
+impl Interpolator<PlayerPhysicsState> {
     pub fn update_player_physics(
         &mut self,
+        time: Instant,
         input_cache: &InputCache,
         chunk_manager: &chunk_manager::ChunkManager,
-        player_properties: &PlayerProperties,
+        player_properties: &mut PlayerProperties,
     ) -> PlayerPhysicsState {
-        self.step(&|mut player: PlayerPhysicsState, _t: f32, dt: f32| {
-            player.acceleration.y += GRAVITY;
-            player.apply_keyboard_movement(&player_properties.rotation, input_cache);
+        self.step(time, &mut |player: &PlayerPhysicsState, _t: f32, dt: f32| {
+            let mut player = player.clone();
+            
+            if !player_properties.is_flying {
+                player.acceleration.y += GRAVITY;
+            }
+
+            player.apply_keyboard_movement(&player_properties, input_cache);
             player.velocity += player.acceleration * dt;
-            player.apply_fricition(dt);
-            player.limit_velocitiy();
+            player.apply_fricition(dt, player_properties.is_flying);
+            player.limit_velocitiy(&player_properties);
 
             let mut is_player_on_ground = false;
+
+            if player.is_on_ground {
+                player_properties.is_flying = false;
+            }
 
             let separated_axis = &[
                 vec3(player.velocity.x, 0.0, 0.0),
@@ -103,3 +127,12 @@ impl PhysicsManager {
         })
     }
 }
+
+impl Interpolator<f32> {
+    pub fn interpolate_fov(&mut self, time: Instant, target_fov: f32) -> f32 {
+        self.step(time, &mut |&fov, _t, dt| {
+            let convergence = 10.0;
+            (convergence * dt) * target_fov  + (1.0 - convergence * dt) * fov
+        })
+    }
+}    

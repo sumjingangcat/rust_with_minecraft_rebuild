@@ -5,7 +5,8 @@ use crate::constants::{
     MOUSE_SENSITIVITY_X, MOUSE_SENSITIVITY_Y, ON_GROUND_FRICTION, PLAYER_WIDTH, WALKING_SPEED,
 };
 use crate::input::InputCache;
-use crate::{PLAYER_EYES_HEIGHT, PLAYER_HALF_WIDTH, PLAYER_HEIGHT};
+use crate::physics::Interpolatable;
+use crate::{FLYING_SPEED, PLAYER_EYES_HEIGHT, PLAYER_HALF_WIDTH, PLAYER_HEIGHT};
 use glfw::Key;
 use nalgebra::{clamp, Vector3};
 use nalgebra_glm::{pi, vec2, vec3, Vec3};
@@ -16,12 +17,14 @@ use crate::util::Forward;
 
 pub struct PlayerProperties {
     pub rotation: Vec3,
+    pub is_flying: bool,
 }
 
 impl PlayerProperties {
     pub fn new() -> Self {
         Self {
             rotation: vec3(0.0, 0.0, 0.0),
+            is_flying: false,
         }
     }
 
@@ -44,6 +47,25 @@ pub struct PlayerPhysicsState {
     pub velocity: Vec3,
     pub acceleration: Vec3,
     pub is_on_ground: bool,
+}
+
+impl Interpolatable for PlayerPhysicsState{
+    fn interpolate(&self, other: &Self, alpha:f32) -> Self {
+        let interpolate_vec3 = |from: &Vec3, to: &Vec3| {
+            alpha * from + (1.0 - alpha) * to
+        };
+
+        Self {
+            position: interpolate_vec3(&self.position, &other.position),
+            aabb: AABB {
+                mins: interpolate_vec3(&self.aabb.mins, &other.aabb.mins),
+                maxs: interpolate_vec3(&self.aabb.maxs, &other.aabb.maxs),
+            },
+            velocity: interpolate_vec3(&self.velocity, &other.velocity),
+            acceleration: interpolate_vec3(&self.acceleration, &other.acceleration),
+            is_on_ground: other.is_on_ground,
+        }
+    }
 }
 
 impl PlayerPhysicsState {
@@ -102,8 +124,26 @@ impl Mul<f32> for PlayerPhysicsState {
 }
 
 impl PlayerPhysicsState {
-    pub fn apply_keyboard_movement(&mut self, rotation: &Vec3, input_cache: &InputCache) {
-        // Player Input Handling
+    // Player Input Handling
+    pub fn apply_keyboard_movement(
+        &mut self,
+        player_properties: &PlayerProperties,
+        input_cache: &InputCache,
+    ) {
+        let rotation = player_properties.rotation;
+
+        // Flying
+        if player_properties.is_flying {
+            if input_cache.is_key_pressed(Key::Space) {
+                self.acceleration = vec3(0.0, 100.0, 0.0);
+            }
+
+            if input_cache.is_key_pressed(Key::LeftShift) {
+                self.acceleration = vec3(0.0, -100.0, 0.0);
+            }
+        }
+
+        // Jump
         if input_cache.is_key_pressed(Key::Space) {
             if self.is_on_ground {
                 self.velocity.y = *JUMP_IMPULSE;
@@ -112,6 +152,7 @@ impl PlayerPhysicsState {
 
         let mut directional_acceleration = vec3(0.0, 0.0, 0.0);
 
+        // Walk
         if input_cache.is_key_pressed(Key::W) {
             directional_acceleration +=
                 -rotation.forward().cross(&Vector3::y()).cross(&Vector3::y());
@@ -121,12 +162,10 @@ impl PlayerPhysicsState {
                 -rotation.forward().cross(&Vector3::y()).cross(&Vector3::y());
         }
         if input_cache.is_key_pressed(Key::A) {
-            directional_acceleration -=
-                rotation.forward().cross(&Vector3::y());
+            directional_acceleration -= rotation.forward().cross(&Vector3::y());
         }
         if input_cache.is_key_pressed(Key::D) {
-            directional_acceleration +=
-                rotation.forward().cross(&Vector3::y());
+            directional_acceleration += rotation.forward().cross(&Vector3::y());
         }
 
         if directional_acceleration.norm_squared() != 0.0 {
@@ -253,7 +292,7 @@ impl PlayerPhysicsState {
         is_player_on_ground
     }
 
-    pub fn apply_fricition(&mut self, dt: f32) {
+    pub fn apply_fricition(&mut self, dt: f32, is_vertically: bool) {
         let friction = if self.is_on_ground {
             ON_GROUND_FRICTION
         } else {
@@ -269,13 +308,29 @@ impl PlayerPhysicsState {
         {
             self.velocity.z -= friction * self.velocity.z * dt;
         }
+
+        if is_vertically {
+            if self.acceleration.y.is_zero()
+                || self.acceleration.y.signum() != self.velocity.y.signum()
+            {
+                self.velocity.y -= ON_GROUND_FRICTION * self.velocity.y * dt;
+            }
+        }
     }
-    pub fn limit_velocitiy(&mut self) {
+    pub fn limit_velocitiy(&mut self, player_properties: &PlayerProperties) {
         let mut horizontal = vec2(self.velocity.x, self.velocity.z);
         let speed = horizontal.magnitude();
 
-        if speed > WALKING_SPEED {
-            horizontal = horizontal.scale(WALKING_SPEED / speed);
+        if player_properties.is_flying {
+            if speed > FLYING_SPEED {
+                horizontal = horizontal.scale(FLYING_SPEED / speed);
+            }
+
+            self.velocity.y = clamp(self.velocity.y, -10.0, 10.0);
+        } else {
+            if speed > WALKING_SPEED {
+                horizontal = horizontal.scale(WALKING_SPEED / speed);
+            }
         }
 
         self.velocity.x = horizontal.x;

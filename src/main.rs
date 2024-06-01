@@ -5,6 +5,7 @@ extern crate lazy_static;
 pub mod debugging;
 
 pub mod aabb;
+pub mod ambient_occlusion;
 pub mod block_texture_sides;
 pub mod chunk;
 pub mod chunk_manager;
@@ -25,6 +26,7 @@ pub mod texture_pack;
 pub mod types;
 pub mod util;
 pub mod window;
+pub mod timer;
 
 use crate::aabb::get_block_aabb;
 use crate::constants::*;
@@ -51,10 +53,13 @@ use nalgebra_glm::{pi, vec3, IVec3, Vec2, Vec3};
 use std::collections::HashMap;
 use std::ffi::CString;
 use std::os::raw::c_void;
+use std::time::Duration;
+use std::time::Instant;
 
-use crate::physics::PhysicsManager;
+use crate::physics::Interpolator;
 use crate::player::{PlayerPhysicsState, PlayerProperties};
 use std::time;
+use crate::timer::Timer;
 
 use crate::gui::{
     create_crosshair_vao, create_gui_icons_texture, create_hotbar_selection_vao, draw_crosshair,
@@ -120,10 +125,13 @@ fn main() {
 
     let mut inventory = Inventory::new(&uv_map);
     let mut player_properties = PlayerProperties::new();
-    let mut physics_manager = PhysicsManager::new(
+    let mut player_interpolator = Interpolator::new(
         1.0 / 60.0,
         PlayerPhysicsState::new_at_position(vec3(0.0f32, 30.0, 0.0)),
     );
+
+    let mut global_timer = Timer::new();
+    let mut player_fov_interpolator = Interpolator::new(1.0 / 30.0, FOV);
 
     gl_call!(gl::ActiveTexture(gl::TEXTURE0 + 0));
     gl_call!(gl::BindTexture(gl::TEXTURE_2D, atlas));
@@ -133,6 +141,9 @@ fn main() {
     // chunk_manager.preload_some_chunks();
 
     let mut input_cache = InputCache::default();
+    let mut flying_trigger_interval = Duration::from_millis(250);
+    let mut last_space = Instant::now();
+    let mut space_throttle = false;
 
     // 메인 루프
     while !window.should_close() {
@@ -141,7 +152,7 @@ fn main() {
             let is_solid_block_at =
                 |x: i32, y: i32, z: i32| chunk_manager.is_solid_block_at(x, y, z);
             let forward = player_properties.rotation.forward();
-            let player = physics_manager.get_current_state();
+            let player: &mut PlayerPhysicsState = player_interpolator.get_current_state();
 
             raycast::raycast(
                 &is_solid_block_at,
@@ -161,6 +172,25 @@ fn main() {
             match event {
                 glfw::WindowEvent::Key(Key::Escape, _, Action::Press, _) => {
                     window.set_should_close(true);
+                }
+
+                glfw::WindowEvent::Key(Key::P, _, Action::Press, _) => {
+                    if global_timer.is_paused() {
+                        global_timer.resume();
+                    } else {
+                        global_timer.pause();
+                    }
+                }
+
+                glfw::WindowEvent::Key(Key::Space, _, Action::Press, _) => {
+                    if space_throttle {
+                        space_throttle = false;
+                    } else if Instant::now().duration_since(last_space) < flying_trigger_interval {
+                        player_properties.is_flying = !player_properties.is_flying;
+                        println!("Flying: {}", player_properties.is_flying);
+                        space_throttle = true;
+                    }
+                    last_space = Instant::now();
                 }
 
                 glfw::WindowEvent::CursorPos(_, _) => {
@@ -187,7 +217,7 @@ fn main() {
                                     adjacent_block.z as f32,
                                 ));
 
-                                let player = physics_manager.get_current_state();
+                                let player = player_interpolator.get_current_state();
 
                                 if !player.aabb.intersects(&adjacent_block_aabb) {
                                     if let Some(block) = inventory.get_selected_item() {
@@ -210,7 +240,7 @@ fn main() {
         }
 
         let player_physics_state =
-            physics_manager.update_player_physics(&input_cache, &chunk_manager, &player_properties);
+            player_interpolator.update_player_physics(global_timer.time(), &input_cache,&chunk_manager,&mut player_properties);
 
         chunk_manager.rebuild_dirty_chunks(&uv_map);
 
@@ -223,6 +253,12 @@ fn main() {
                 &(camera_position + looking_dir),
                 &Vector3::y(),
             )
+        };
+
+        let target_fov = if !player_properties.is_flying {
+            FOV
+        } else {
+            FOV + FOV * 0.15
         };
 
         let projection_matrix = nalgebra_glm::perspective(

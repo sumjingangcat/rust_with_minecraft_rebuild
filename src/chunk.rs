@@ -49,6 +49,18 @@ fn create_vao_vbo() -> (u32, u32) {
     ));
     gl_call!(gl::VertexArrayAttribBinding(vao, 2, 0));
 
+    // Ambient occlusion
+    gl_call!(gl::EnableVertexArrayAttrib(vao, 3));
+    gl_call!(gl::VertexArrayAttribFormat(
+        vao,
+        3,
+        1_i32,
+        gl::FLOAT,
+        gl::FALSE,
+        (8 * std::mem::size_of::<f32>()) as u32
+    ));
+    gl_call!(gl::VertexArrayAttribBinding(vao, 3, 0));
+
     let mut vbo = 0;
     gl_call!(gl::CreateBuffers(1, &mut vbo));
 
@@ -57,7 +69,7 @@ fn create_vao_vbo() -> (u32, u32) {
         0,
         vbo,
         0,
-        (8 * std::mem::size_of::<f32>()) as i32
+        (9 * std::mem::size_of::<f32>()) as i32
     ));
 
     (vao, vbo)
@@ -86,6 +98,13 @@ impl BlockID {
     pub fn is_transparent(&self) -> bool {
         match self {
             BlockID::Air | BlockID::OakLeaves | BlockID::Glass => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_transparent_no_leaves(&self) -> bool {
+        match self {
+            BlockID::Air | BlockID::Glass => true,
             _ => false,
         }
     }

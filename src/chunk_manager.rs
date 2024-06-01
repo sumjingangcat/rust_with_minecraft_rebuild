@@ -1,3 +1,4 @@
+use crate::ambient_occlusion::compute_ao_of_block;
 use crate::block_texture_sides::BlockFaces;
 use crate::shader::ShaderProgram;
 use crate::types::UVCoords;
@@ -159,10 +160,14 @@ impl ChunkManager {
 
         /*
            Optimization :
-               If 2
+               If 2 solid blocks are touching, don't render the faces where they touch.
+               Render only the faces that are next to a transparent block (AIR for example)
         */
+        type ChunkCoords = (i32, i32, i32);
         pub type Sides = [bool; 6];
-        let mut active_sides: HashMap<(i32, i32, i32), Vec<Sides>> = HashMap::new();
+        type CubeAO = [[u8; 4]; 6];
+        let mut active_sides: HashMap<ChunkCoords, Vec<Sides>> = HashMap::new();
+        let mut ao_chunk: HashMap<ChunkCoords, Vec<CubeAO>> = HashMap::new();
 
         for &coords in dirty_chunks.iter() {
             let (cx, cy, cz) = coords;
@@ -170,13 +175,23 @@ impl ChunkManager {
 
             if let Some(chunk) = chunk {
                 let sides_vec = active_sides.entry(coords).or_default();
+                let ao_vec = ao_chunk.entry(coords).or_default();
 
                 for (bx, by, bz) in BlockIterator::new() {
                     let block = chunk.get_block(bx, by, bz);
                     if !block.is_air() {
                         let (gx, gy, gz) =
                             ChunkManager::get_global_coords((cx, cy, cz, bx, by, bz));
-                        sides_vec.push(self.get_active_sides_of_block(gx, gy, gz));
+                        let acitve_sides_of_block = self.get_active_sides_of_block(gx, gy, gz);
+                        sides_vec.push(acitve_sides_of_block);
+
+                        let does_occlude = |x: i32, y: i32, z: i32| {
+                            self.get_block(x, y, z)
+                                .filter(|&b| !b.is_transparent_no_leaves())
+                                .is_some()
+                        };
+
+                        ao_vec.push(compute_ao_of_block(&does_occlude));
                     }
                 }
             }
@@ -202,9 +217,11 @@ impl ChunkManager {
                     continue;
                 }
 
+                // Initialize the VAO and VBO
+                // NOTE: 324 = 6 * 6 * 9 (6 faces, 6 vertices per face, 9 floats per vertex)
                 gl_call!(gl::NamedBufferData(
                     chunk.vbo,
-                    (6 * 6 * 8 * std::mem::size_of::<f32>() * n_visible_faces as usize) as isize,
+                    (324 * std::mem::size_of::<f32>() * n_visible_faces as usize) as isize,
                     std::ptr::null(),
                     gl::DYNAMIC_DRAW
                 ));
@@ -213,6 +230,7 @@ impl ChunkManager {
                 let mut idx = 0;
 
                 let sides_vec = active_sides.get(coords).unwrap();
+                let ao_vec = ao_chunk.get(coords).unwrap();
                 let mut cnt = 0;
 
                 for (x, y, z) in BlockIterator::new() {
@@ -220,7 +238,7 @@ impl ChunkManager {
 
                     if block != BlockID::Air {
                         let active_sides = sides_vec[cnt];
-
+                        let ao_block = ao_vec[cnt];
                         let uvs = uv_map.get(&block).unwrap().clone();
                         let uvs = uvs.get_uv_of_every_faces();
 
@@ -230,11 +248,12 @@ impl ChunkManager {
                                 (x as f32, y as f32, z as f32),
                                 uvs,
                                 active_sides,
+                                ao_block,
                             )
                         };
 
                         chunk.vertices_drawn += copied_vertices;
-                        idx += copied_vertices as isize * 8;
+                        idx += copied_vertices as isize * 9;
                         cnt += 1;
                     }
                 }

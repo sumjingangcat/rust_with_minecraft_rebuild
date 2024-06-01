@@ -31,7 +31,8 @@ pub const BLOCK_TEXTURE_SIZE: u32 = 16;
 pub const REACH_DISTANCE: f32 = 400.0;
 pub const JUMP_HEIGHT: f32 = 1.3;
 pub const HORIZONTAL_ACCELERATION: f32 = 30.0;
-pub const WALKING_SPEED: f32 = 4.137f32;
+pub const WALKING_SPEED: f32 = 4.137;
+pub const FLYING_SPEED: f32 = 10.92;
 
 pub const PLAYER_WIDTH: f32 = 0.6;
 pub const PLAYER_HEIGHT: f32 = 1.8;
